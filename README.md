@@ -8,15 +8,16 @@ DatabaseSearcher is a desktop application for searching, viewing, and editing ge
 - Modular, event-driven design for easy extension
 - User-friendly interface with menus and dialogs
 
-## Project Structure
+## New Project Structure
 ```
 DatabaseSearcher/
-├── engine/         # Core application logic (CoreProcessor)
-├── events/         # Event definitions and event bus (EventDispatcher)
-├── views/          # GUI components (AppMainWindow, views for continents, countries, regions)
-├── __init__.py     # Package initialization
-main.py             # Application entry point
-schema.sql          # Example database schema
+├── app.py           # Application entry point
+├── backend.py       # All database and event handling logic
+├── gui.py           # All Tkinter GUI logic
+├── events.py        # All event classes and event bus
+├── models.py        # Data models for Continent, Country, Region
+├── schema.sql       # Example database schema
+├── README.md        # Project documentation
 ```
 
 ## Getting Started
@@ -43,7 +44,7 @@ schema.sql          # Example database schema
 
 ### Running the Application
 ```
-python main.py
+python app.py
 ```
 
 ## Usage
@@ -52,13 +53,11 @@ python main.py
 - Save changes directly to the database.
 
 ## Architecture Overview
-- **CoreProcessor**: Handles all database operations and event processing.
-- **EventDispatcher**: Routes events between the GUI and the engine.
-- **AppMainWindow**: The main Tkinter window and event handler.
-- **Views**: Separate views for continents, countries, and regions.
+- **DataBackend**: Handles all database operations and event processing.
+- **EventBus**: Routes events between the GUI and the backend.
+- **MainWindow**: The main Tkinter window and event handler.
+- **Panels**: Separate panels for continents, countries, and regions.
+- **Models**: Data classes for each entity.
 
 ## License
-MIT License
-
----
-*This project was refactored from a school assignment to serve as a general-purpose database search and edit tool.* 
+MIT License 
