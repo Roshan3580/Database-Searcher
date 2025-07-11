@@ -11,9 +11,9 @@ DatabaseSearcher is a desktop application for searching, viewing, and editing ge
 ## Project Structure
 ```
 DatabaseSearcher/
-├── engine/         # Core application logic (DatabaseEngine)
-├── events/         # Event definitions and event bus (AppEventBus)
-├── views/          # GUI components (MainWindow, views for continents, countries, regions)
+├── engine/         # Core application logic (CoreProcessor)
+├── events/         # Event definitions and event bus (EventDispatcher)
+├── views/          # GUI components (AppMainWindow, views for continents, countries, regions)
 ├── __init__.py     # Package initialization
 main.py             # Application entry point
 schema.sql          # Example database schema
@@ -52,9 +52,9 @@ python main.py
 - Save changes directly to the database.
 
 ## Architecture Overview
-- **DatabaseEngine**: Handles all database operations and event processing.
-- **AppEventBus**: Routes events between the GUI and the engine.
-- **MainWindow**: The main Tkinter window and event handler.
+- **CoreProcessor**: Handles all database operations and event processing.
+- **EventDispatcher**: Routes events between the GUI and the engine.
+- **AppMainWindow**: The main Tkinter window and event handler.
 - **Views**: Separate views for continents, countries, and regions.
 
 ## License
