@@ -1,21 +1,8 @@
-# p2app/events/event_bus.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# An intermediary that routes events to the parts of the application that are
-# meant to handle them.
-#
-# * Most events are routed to the engine to be processed, with the engine's
-#   results routed back to the user interface.
-# * The user interface's internal events are routed back to the user interface
-#   to be processed, with the engine never seeing them.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/events/event_bus.py
 
 
 
-class EventBus:
+class AppEventBus:
     def __init__(self):
         self._view = None
         self._engine = None

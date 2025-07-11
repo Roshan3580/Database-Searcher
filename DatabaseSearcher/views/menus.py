@@ -1,15 +1,8 @@
-# p2app/views/menus.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# An implementation of the application's menus.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/views/menus.py
 
 import tkinter
 import tkinter.filedialog
-from p2app.events import *
+from DatabaseSearcher.events import *
 from .events import *
 from .event_handling import EventHandler
 

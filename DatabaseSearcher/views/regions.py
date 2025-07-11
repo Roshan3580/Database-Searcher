@@ -1,16 +1,8 @@
-# p2app/views/regions.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# This is the portion of the user interface that is displayed when the
-# Edit / Regions menu item is selected.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/views/regions.py
 
 import tkinter
 import tkinter.messagebox
-from p2app.events import *
+from DatabaseSearcher.events import *
 from .event_handling import EventHandler
 from .events import *
 

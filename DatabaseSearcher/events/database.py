@@ -1,13 +1,4 @@
-# p2app/events/database.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# Events related to the opening and closing of the database.
-#
-# See the project write-up for details on when these events are sent and by whom.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/events/database.py
 
 from pathlib import Path
 

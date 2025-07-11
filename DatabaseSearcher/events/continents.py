@@ -1,14 +1,4 @@
-# p2app/events/continents.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# Events that are either related to searching for, creating, or editing continents
-# in the database.
-#
-# See the project write-up for details on when these events are sent and by whom.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/events/continents.py
 
 from collections import namedtuple
 

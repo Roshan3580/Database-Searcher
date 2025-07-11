@@ -1,101 +1,52 @@
-
-# p2app/engine/main.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# An object that represents the engine of the application.
-#
-# This is the outermost layer of the part of the program that you'll need to build,
-# which means that YOU WILL DEFINITELY NEED TO MAKE CHANGES TO THIS FILE.
-
+# DatabaseSearcher/engine/main.py
 
 import sqlite3
-from p2app.events.app import *
-from p2app.events.database import *
-from p2app.events.continents import *
-from p2app.events.countries import *
-from p2app.events.regions import *
+from DatabaseSearcher.events.app import *
+from DatabaseSearcher.events.database import *
+from DatabaseSearcher.events.continents import *
+from DatabaseSearcher.events.countries import *
+from DatabaseSearcher.events.regions import *
 
 
-class Engine:
-    """An object that represents the application's engine, whose main role is to
-    process events sent to it by the user interface, then generate events that are
-    sent back to the user interface in response, allowing the user interface to be
-    unaware of any details of how the engine is implemented.
-    """
-
+class CoreProcessor:
     def __init__(self):
-        """Initializes the engine"""
-        self.connection = None
+        self.db_conn = None
+        self._event_map = {
+            QuitInitiatedEvent: self.process_quit,
+            OpenDatabaseEvent: self.process_db_open,
+            StartContinentSearchEvent: self.process_continent_search,
+            LoadContinentEvent: self.process_continent_load,
+            SaveNewContinentEvent: self.process_continent_create,
+            SaveContinentEvent: self.process_continent_update,
+            StartCountrySearchEvent: self.process_country_search,
+            LoadCountryEvent: self.process_country_load,
+            SaveNewCountryEvent: self.process_country_create,
+            SaveCountryEvent: self.process_country_update,
+            StartRegionSearchEvent: self.process_region_search,
+            LoadRegionEvent: self.process_region_load,
+            SaveNewRegionEvent: self.process_region_create,
+            SaveRegionEvent: self.process_region_update,
+            CloseDatabaseEvent: self.process_db_close
+        }
 
-
-    def process_event(self, event):
-        """A generator function that processes one event sent from the user interface,
-        yielding zero or more events in response."""
-
+    def handle_event(self, evt):
         try:
-            if isinstance(event, QuitInitiatedEvent):
-                yield from self.handle_quit_event()
-
-            elif isinstance(event, OpenDatabaseEvent):
-                yield from self.handle_open_database_event(event)
-
-            elif isinstance(event, StartContinentSearchEvent):
-                yield from self.handle_start_continent_search_event(event)
-
-            elif isinstance(event, LoadContinentEvent):
-                yield from self.handle_load_continent_event(event)
-
-            elif isinstance(event, SaveNewContinentEvent):
-                yield from self.handle_save_new_continent_event(event)
-
-            elif isinstance(event, SaveContinentEvent):
-                yield from self.handle_save_continent_event(event)
-
-            elif isinstance(event, StartCountrySearchEvent):
-                yield from self.handle_start_country_search_event(event)
-
-            elif isinstance(event, LoadCountryEvent):
-                yield from self.handle_load_country_event(event)
-
-            elif isinstance(event, SaveNewCountryEvent):
-                yield from self.handle_save_new_country_event(event)
-
-            elif isinstance(event, SaveCountryEvent):
-                yield from self.handle_save_country_event(event)
-
-            elif isinstance(event, StartRegionSearchEvent):
-                yield from self.handle_start_region_search_event(event)
-
-            elif isinstance(event, LoadRegionEvent):
-                yield from self.handle_load_region_event(event)
-
-            elif isinstance(event, SaveNewRegionEvent):
-                yield from self.handle_save_new_region_event(event)
-
-            elif isinstance(event, SaveRegionEvent):
-                yield from self.handle_save_region_event(event)
-
-            elif isinstance(event, CloseDatabaseEvent):
-                yield from self.handle_close_database_event()
-
-        except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
-
+            handler = self._event_map.get(type(evt))
+            if handler:
+                yield from handler(evt)
+        except Exception as exc:
+            yield ErrorEvent(f"[Core Error] {exc}")
 
     @staticmethod
-    def handle_quit_event():
-        """Handles QuitInitiatedEvent."""
+    def process_quit(evt):
         yield EndApplicationEvent()
 
-
-    def handle_open_database_event(self, event):
+    def process_db_open(self, evt):
         """Handles OpenDatabaseEvent."""
         try:
-            database_path = event.path()
+            database_path = evt.path()
             if database_path.suffix.lower() in ['.db', '.sqlite', '.mdb', '.accdb']:
-                self.connection = sqlite3.connect(database_path)
+                self.db_conn = sqlite3.connect(database_path)
                 yield DatabaseOpenedEvent(database_path)
 
             else:
@@ -104,21 +55,21 @@ class Engine:
         except Exception as e:
             yield DatabaseOpenFailedEvent(f"Failed to open the database. Sorry! {e}")
 
-    def handle_close_database_event(self):
+    def process_db_close(self, evt):
         """Handles CloseDatabaseEvent."""
-        if self.connection:
-            self.connection.close()
+        if self.db_conn:
+            self.db_conn.close()
             yield DatabaseClosedEvent()
-            self.connection = None
+            self.db_conn = None
 
 
-    def handle_start_continent_search_event(self, event):
+    def process_continent_search(self, evt):
         """Handles StartContinentSearchEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                search_continent_code = event.continent_code()
-                search_name = event.name()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                search_continent_code = evt.continent_code()
+                search_name = evt.name()
 
                 if search_continent_code and search_name:
                     cursor.execute("SELECT * FROM continent WHERE continent_code = ? AND name = ?",
@@ -141,12 +92,12 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_load_continent_event(self, event):
+    def process_continent_load(self, evt):
         """Handles LoadContinentEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                search_continent_id = event.continent_id()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                search_continent_id = evt.continent_id()
                 cursor.execute("SELECT * FROM continent WHERE continent_id = ?", (search_continent_id,))
                 rows = cursor.fetchall()
                 for row in rows:
@@ -158,15 +109,15 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_save_new_continent_event(self, event):
+    def process_continent_create(self, evt):
         """Handles SaveNewContinentEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                new_continent = event.continent()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                new_continent = evt.continent()
                 cursor.execute("INSERT INTO continent (continent_code, name) VALUES (?, ?)",
                                (new_continent.continent_code, new_continent.name))
-                self.connection.commit()
+                self.db_conn.commit()
                 yield ContinentSavedEvent(new_continent)
             else:
                 yield ErrorEvent("Open a database first!")
@@ -174,17 +125,17 @@ class Engine:
             yield SaveContinentFailedEvent(f"Failed to save the new continent: {e}")
 
 
-    def handle_save_continent_event(self, event):
+    def process_continent_update(self, evt):
         """Handles SaveContinentEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                modified_continent = event.continent()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                modified_continent = evt.continent()
                 cursor.execute(
                     "UPDATE continent SET continent_code = ?, name = ? WHERE continent_id = ?",
                     (modified_continent.continent_code, modified_continent.name,
                      modified_continent.continent_id))
-                self.connection.commit()
+                self.db_conn.commit()
                 yield ContinentSavedEvent(modified_continent)
             else:
                 yield ErrorEvent("Open a database first!")
@@ -192,13 +143,13 @@ class Engine:
             yield SaveContinentFailedEvent(f"Failed to save the continent: {e}")
 
 
-    def handle_start_country_search_event(self, event):
+    def process_country_search(self, evt):
         """Handles StartCountrySearchEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                search_country_code = event.country_code()
-                search_name = event.name()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                search_country_code = evt.country_code()
+                search_name = evt.name()
 
                 if search_country_code and search_name:
                     cursor.execute("SELECT * FROM country WHERE country_code = ? AND name = ?",
@@ -222,12 +173,12 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_load_country_event(self, event):
+    def process_country_load(self, evt):
         """Handles LoadCountryEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                country_id = event.country_id()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                country_id = evt.country_id()
                 cursor.execute("SELECT * FROM country WHERE country_id = ?", (country_id,))
                 country_row = cursor.fetchone()
                 if country_row:
@@ -241,17 +192,17 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_save_new_country_event(self, event):
+    def process_country_create(self, evt):
         """Handles SaveNewCountryEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                new_country = event.country()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                new_country = evt.country()
                 cursor.execute(
                     "INSERT INTO country (country_code, name, continent_id, wikipedia_link, keywords) VALUES (?, ?, ?, ?, ?)",
                     (new_country.country_code, new_country.name, new_country.continent_id,
                      new_country.wikipedia_link, new_country.keywords))
-                self.connection.commit()
+                self.db_conn.commit()
                 yield CountrySavedEvent(new_country)
             else:
                 yield ErrorEvent("Open a database first!")
@@ -259,18 +210,18 @@ class Engine:
             yield SaveCountryFailedEvent(f"Failed to save the new country: {e}")
 
 
-    def handle_save_country_event(self, event):
+    def process_country_update(self, evt):
         """Handles SaveCountryEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                modified_country = event.country()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                modified_country = evt.country()
                 cursor.execute(
                     "UPDATE country SET country_code = ?, name = ?, continent_id = ?, wikipedia_link = ?, keywords = ? WHERE country_id = ?",
                     (modified_country.country_code, modified_country.name,
                      modified_country.continent_id, modified_country.wikipedia_link,
                      modified_country.keywords, modified_country.country_id))
-                self.connection.commit()
+                self.db_conn.commit()
                 yield CountrySavedEvent(modified_country)
             else:
                 yield ErrorEvent("Open a database first!")
@@ -278,14 +229,14 @@ class Engine:
             yield SaveCountryFailedEvent(f"Failed to save the country: {e}")
 
 
-    def handle_start_region_search_event(self, event):
+    def process_region_search(self, evt):
         """Handles StartRegionSearchEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                search_region_code = event.region_code()
-                search_local_code = event.local_code()
-                search_name = event.name()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                search_region_code = evt.region_code()
+                search_local_code = evt.local_code()
+                search_name = evt.name()
 
                 sql_query = "SELECT * FROM region WHERE 1=1"
                 params = []
@@ -312,12 +263,12 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_load_region_event(self, event):
+    def process_region_load(self, evt):
         """Handles LoadRegionEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                search_region_id = event.region_id()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                search_region_id = evt.region_id()
 
                 cursor.execute("SELECT * FROM region WHERE region_id = ?", (search_region_id,))
                 row = cursor.fetchone()
@@ -333,12 +284,12 @@ class Engine:
             yield ErrorEvent(f"Error: {e}")
 
 
-    def handle_save_new_region_event(self, event):
+    def process_region_create(self, evt):
         """Handles SaveNewRegionEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                new_region = event.region()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                new_region = evt.region()
 
                 cursor.execute(
                     "INSERT INTO region (region_code, local_code, name, continent_id, country_id, wikipedia_link, keywords) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -346,7 +297,7 @@ class Engine:
                      new_region.continent_id, new_region.country_id, new_region.wikipedia_link,
                      new_region.keywords))
 
-                self.connection.commit()
+                self.db_conn.commit()
                 yield RegionSavedEvent(new_region)
             else:
                 yield ErrorEvent("Open a database first!")
@@ -354,12 +305,12 @@ class Engine:
             yield SaveRegionFailedEvent(f"Failed to save the new region: {e}")
 
 
-    def handle_save_region_event(self, event):
+    def process_region_update(self, evt):
         """Handles SaveRegionEvent."""
         try:
-            if self.connection:
-                cursor = self.connection.cursor()
-                modified_region = event.region()
+            if self.db_conn:
+                cursor = self.db_conn.cursor()
+                modified_region = evt.region()
 
                 cursor.execute(
                     "UPDATE region SET region_code = ?, local_code = ?, name = ?, continent_id = ?, country_id = ?, wikipedia_link = ?, keywords = ? WHERE region_id = ?",
@@ -368,7 +319,7 @@ class Engine:
                      modified_region.country_id, modified_region.wikipedia_link,
                      modified_region.keywords, modified_region.region_id))
 
-                self.connection.commit()
+                self.db_conn.commit()
                 yield RegionSavedEvent(modified_region)
             else:
                 yield ErrorEvent("Open a database first!")

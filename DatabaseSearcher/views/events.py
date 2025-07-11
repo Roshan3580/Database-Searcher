@@ -1,14 +1,4 @@
-# p2app/views/events.py
-#
-# ICS 33 Spring 2024
-# Project 2: Learning to Fly
-#
-# These are a collection of events that are internal to the user interface.
-# When the user interface sends these events, they are propagated to other
-# components within the user interface, but aren't sent to the engine to
-# be processed by it.
-#
-# YOU WILL NOT NEED TO MODIFY THIS FILE AT ALL
+# DatabaseSearcher/views/events.py
 
 
 
