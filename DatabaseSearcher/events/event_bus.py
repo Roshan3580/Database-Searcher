@@ -1,36 +1,22 @@
 # DatabaseSearcher/events/event_bus.py
 
-
-
-class AppEventBus:
+class EventRouter:
     def __init__(self):
-        self._view = None
-        self._engine = None
-        self._is_debug_mode = False
-
-
-    def register_view(self, view):
-        self._view = view
-
-
-    def register_engine(self, engine):
-        self._engine = engine
-
-
-    def enable_debug_mode(self):
-        self._is_debug_mode = True
-
-
-    def disable_debug_mode(self):
-        self._is_debug_mode = False
-
-
-    def initiate_event(self, event):
-        if self._is_debug_mode:
-            print(f'Sent by view  : {event}')
-
-        for result_event in self._engine.process_event(event):
-            if self._is_debug_mode:
-                print(f'Sent by engine: {result_event}')
-
-            self._view.handle_event(result_event)
+        self._ui = None
+        self._core = None
+        self._debug = False
+    def attach_ui(self, ui):
+        self._ui = ui
+    def attach_core(self, core):
+        self._core = core
+    def debug_on(self):
+        self._debug = True
+    def debug_off(self):
+        self._debug = False
+    def dispatch(self, evt):
+        if self._debug:
+            print(f'[UI->Core] {evt}')
+        for resp in self._core.handle_event(evt):
+            if self._debug:
+                print(f'[Core->UI] {resp}')
+            self._ui.receive_event(resp)

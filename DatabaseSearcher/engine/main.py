@@ -3,30 +3,36 @@
 import sqlite3
 from DatabaseSearcher.events.app import *
 from DatabaseSearcher.events.database import *
-from DatabaseSearcher.events.continents import *
+from DatabaseSearcher.events.continents import (
+    ContinentSearchRequest, ContinentLoadRequest, ContinentCreateRequest, ContinentUpdateRequest,
+    ContinentSavedNotice, ContinentSaveFailedNotice, ContinentLoadedNotice, ContinentSearchResult, GeoContinent
+)
 from DatabaseSearcher.events.countries import *
-from DatabaseSearcher.events.regions import *
+from DatabaseSearcher.events.regions import (
+    RegionSearchRequest, RegionLoadRequest, RegionCreateRequest, RegionUpdateRequest,
+    RegionSavedNotice, RegionSaveFailedNotice, RegionLoadedNotice, RegionSearchResult, GeoRegion
+)
 
 
 class CoreProcessor:
     def __init__(self):
         self.db_conn = None
         self._event_map = {
-            QuitInitiatedEvent: self.process_quit,
-            OpenDatabaseEvent: self.process_db_open,
-            StartContinentSearchEvent: self.process_continent_search,
-            LoadContinentEvent: self.process_continent_load,
-            SaveNewContinentEvent: self.process_continent_create,
-            SaveContinentEvent: self.process_continent_update,
-            StartCountrySearchEvent: self.process_country_search,
-            LoadCountryEvent: self.process_country_load,
-            SaveNewCountryEvent: self.process_country_create,
-            SaveCountryEvent: self.process_country_update,
-            StartRegionSearchEvent: self.process_region_search,
-            LoadRegionEvent: self.process_region_load,
-            SaveNewRegionEvent: self.process_region_create,
-            SaveRegionEvent: self.process_region_update,
-            CloseDatabaseEvent: self.process_db_close
+            AppQuitRequest: self.process_quit,
+            DBOpenRequest: self.process_db_open,
+            ContinentSearchRequest: self.process_continent_search,
+            ContinentLoadRequest: self.process_continent_load,
+            ContinentCreateRequest: self.process_continent_create,
+            ContinentUpdateRequest: self.process_continent_update,
+            CountrySearchRequest: self.process_country_search,
+            CountryLoadRequest: self.process_country_load,
+            CountryCreateRequest: self.process_country_create,
+            CountryUpdateRequest: self.process_country_update,
+            RegionSearchRequest: self.process_region_search,
+            RegionLoadRequest: self.process_region_load,
+            RegionCreateRequest: self.process_region_create,
+            RegionUpdateRequest: self.process_region_update,
+            DBCloseRequest: self.process_db_close
         }
 
     def handle_event(self, evt):
@@ -35,31 +41,31 @@ class CoreProcessor:
             if handler:
                 yield from handler(evt)
         except Exception as exc:
-            yield ErrorEvent(f"[Core Error] {exc}")
+            yield AppErrorEvent(f"[Core Error] {exc}")
 
     @staticmethod
     def process_quit(evt):
-        yield EndApplicationEvent()
+        yield AppShutdownEvent()
 
     def process_db_open(self, evt):
         """Handles OpenDatabaseEvent."""
         try:
-            database_path = evt.path()
+            database_path = evt.get_path()
             if database_path.suffix.lower() in ['.db', '.sqlite', '.mdb', '.accdb']:
                 self.db_conn = sqlite3.connect(database_path)
-                yield DatabaseOpenedEvent(database_path)
+                yield DBOpenedNotice(database_path)
 
             else:
                 raise ValueError("The file you selected is not a supported database file!")
 
         except Exception as e:
-            yield DatabaseOpenFailedEvent(f"Failed to open the database. Sorry! {e}")
+            yield DBOpenFailedNotice(f"Failed to open the database. Sorry! {e}")
 
     def process_db_close(self, evt):
         """Handles CloseDatabaseEvent."""
         if self.db_conn:
             self.db_conn.close()
-            yield DatabaseClosedEvent()
+            yield DBCloseNotice()
             self.db_conn = None
 
 
@@ -68,28 +74,28 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                search_continent_code = evt.continent_code()
-                search_name = evt.name()
+                search_code = evt.get_code()
+                search_label = evt.get_label()
 
-                if search_continent_code and search_name:
+                if search_code and search_label:
                     cursor.execute("SELECT * FROM continent WHERE continent_code = ? AND name = ?",
-                                   (search_continent_code, search_name))
-                elif search_continent_code:
+                                   (search_code, search_label))
+                elif search_code:
                     cursor.execute("SELECT * FROM continent WHERE continent_code = ?",
-                                   (search_continent_code,))
-                elif search_name:
-                    cursor.execute("SELECT * FROM continent WHERE name = ?", (search_name,))
+                                   (search_code,))
+                elif search_label:
+                    cursor.execute("SELECT * FROM continent WHERE name = ?", (search_label,))
 
                 rows = cursor.fetchall()
                 for row in rows:
-                    continent = Continent(*row)
-                    yield ContinentSearchResultEvent(continent)
+                    continent = GeoContinent(*row)
+                    yield ContinentSearchResult(continent)
                 if not rows:
                     return
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_continent_load(self, evt):
@@ -97,16 +103,16 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                search_continent_id = evt.continent_id()
-                cursor.execute("SELECT * FROM continent WHERE continent_id = ?", (search_continent_id,))
+                search_gid = evt.get_id()
+                cursor.execute("SELECT * FROM continent WHERE continent_id = ?", (search_gid,))
                 rows = cursor.fetchall()
                 for row in rows:
-                    continent = Continent(*row)
-                    yield ContinentLoadedEvent(continent)
+                    continent = GeoContinent(*row)
+                    yield ContinentLoadedNotice(continent)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_continent_create(self, evt):
@@ -114,15 +120,15 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                new_continent = evt.continent()
+                new_continent = evt.get_continent()
                 cursor.execute("INSERT INTO continent (continent_code, name) VALUES (?, ?)",
-                               (new_continent.continent_code, new_continent.name))
+                               (new_continent.code, new_continent.label))
                 self.db_conn.commit()
-                yield ContinentSavedEvent(new_continent)
+                yield ContinentSavedNotice(new_continent)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveContinentFailedEvent(f"Failed to save the new continent: {e}")
+            yield ContinentSaveFailedNotice(f"Failed to save the new continent: {e}")
 
 
     def process_continent_update(self, evt):
@@ -130,17 +136,16 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                modified_continent = evt.continent()
+                modified_continent = evt.get_continent()
                 cursor.execute(
                     "UPDATE continent SET continent_code = ?, name = ? WHERE continent_id = ?",
-                    (modified_continent.continent_code, modified_continent.name,
-                     modified_continent.continent_id))
+                    (modified_continent.code, modified_continent.label, modified_continent.gid))
                 self.db_conn.commit()
-                yield ContinentSavedEvent(modified_continent)
+                yield ContinentSavedNotice(modified_continent)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveContinentFailedEvent(f"Failed to save the continent: {e}")
+            yield ContinentSaveFailedNotice(f"Failed to save the continent: {e}")
 
 
     def process_country_search(self, evt):
@@ -148,29 +153,29 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                search_country_code = evt.country_code()
-                search_name = evt.name()
+                search_code = evt.get_code()
+                search_label = evt.get_label()
 
-                if search_country_code and search_name:
+                if search_code and search_label:
                     cursor.execute("SELECT * FROM country WHERE country_code = ? AND name = ?",
-                                   (search_country_code, search_name))
-                elif search_country_code:
+                                   (search_code, search_label))
+                elif search_code:
                     cursor.execute("SELECT * FROM country WHERE country_code = ?",
-                                   (search_country_code,))
-                elif search_name:
-                    cursor.execute("SELECT * FROM country WHERE name = ?", (search_name,))
+                                   (search_code,))
+                elif search_label:
+                    cursor.execute("SELECT * FROM country WHERE name = ?", (search_label,))
 
                 rows = cursor.fetchall()
                 for row in rows:
-                    country = Country(*row)
-                    yield CountrySearchResultEvent(country)
+                    country = GeoCountry(*row)
+                    yield CountrySearchResult(country)
 
                 if not rows:
                     return
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_country_load(self, evt):
@@ -178,18 +183,18 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                country_id = evt.country_id()
-                cursor.execute("SELECT * FROM country WHERE country_id = ?", (country_id,))
+                gid = evt.get_id()
+                cursor.execute("SELECT * FROM country WHERE country_id = ?", (gid,))
                 country_row = cursor.fetchone()
                 if country_row:
-                    country = Country(*country_row)
-                    yield CountryLoadedEvent(country)
+                    country = GeoCountry(*country_row)
+                    yield CountryLoadedNotice(country)
                 else:
-                    yield ErrorEvent("Country not found in the database.")
+                    yield AppErrorEvent("Country not found in the database.")
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_country_create(self, evt):
@@ -197,17 +202,17 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                new_country = evt.country()
+                new_country = evt.get_country()
                 cursor.execute(
                     "INSERT INTO country (country_code, name, continent_id, wikipedia_link, keywords) VALUES (?, ?, ?, ?, ?)",
-                    (new_country.country_code, new_country.name, new_country.continent_id,
-                     new_country.wikipedia_link, new_country.keywords))
+                    (new_country.code, new_country.label, new_country.continent_gid,
+                     new_country.wiki, new_country.tags))
                 self.db_conn.commit()
-                yield CountrySavedEvent(new_country)
+                yield CountrySavedNotice(new_country)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveCountryFailedEvent(f"Failed to save the new country: {e}")
+            yield CountrySaveFailedNotice(f"Failed to save the new country: {e}")
 
 
     def process_country_update(self, evt):
@@ -215,18 +220,18 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                modified_country = evt.country()
+                modified_country = evt.get_country()
                 cursor.execute(
                     "UPDATE country SET country_code = ?, name = ?, continent_id = ?, wikipedia_link = ?, keywords = ? WHERE country_id = ?",
-                    (modified_country.country_code, modified_country.name,
-                     modified_country.continent_id, modified_country.wikipedia_link,
-                     modified_country.keywords, modified_country.country_id))
+                    (modified_country.code, modified_country.label,
+                     modified_country.continent_gid, modified_country.wiki,
+                     modified_country.tags, modified_country.gid))
                 self.db_conn.commit()
-                yield CountrySavedEvent(modified_country)
+                yield CountrySavedNotice(modified_country)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveCountryFailedEvent(f"Failed to save the country: {e}")
+            yield CountrySaveFailedNotice(f"Failed to save the country: {e}")
 
 
     def process_region_search(self, evt):
@@ -234,33 +239,33 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                search_region_code = evt.region_code()
-                search_local_code = evt.local_code()
-                search_name = evt.name()
+                search_code = evt.get_code()
+                search_local = evt.get_local()
+                search_label = evt.get_label()
 
                 sql_query = "SELECT * FROM region WHERE 1=1"
                 params = []
 
-                if search_region_code:
+                if search_code:
                     sql_query += " AND region_code = ?"
-                    params.append(search_region_code)
-                if search_local_code:
+                    params.append(search_code)
+                if search_local:
                     sql_query += " AND local_code = ?"
-                    params.append(search_local_code)
-                if search_name:
+                    params.append(search_local)
+                if search_label:
                     sql_query += " AND name = ?"
-                    params.append(search_name)
+                    params.append(search_label)
 
                 cursor.execute(sql_query, params)
                 rows = cursor.fetchall()
 
                 for row in rows:
-                    region = Region(*row)
-                    yield RegionSearchResultEvent(region)
+                    region = GeoRegion(*row)
+                    yield RegionSearchResult(region)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_region_load(self, evt):
@@ -268,20 +273,20 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                search_region_id = evt.region_id()
+                gid = evt.get_id()
 
-                cursor.execute("SELECT * FROM region WHERE region_id = ?", (search_region_id,))
+                cursor.execute("SELECT * FROM region WHERE region_id = ?", (gid,))
                 row = cursor.fetchone()
 
                 if row:
-                    region = Region(*row)
-                    yield RegionLoadedEvent(region)
+                    region = GeoRegion(*row)
+                    yield RegionLoadedNotice(region)
                 else:
-                    yield ErrorEvent("Region not found.")
+                    yield AppErrorEvent("Region not found.")
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield ErrorEvent(f"Error: {e}")
+            yield AppErrorEvent(f"Error: {e}")
 
 
     def process_region_create(self, evt):
@@ -289,20 +294,20 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                new_region = evt.region()
+                new_region = evt.get_region()
 
                 cursor.execute(
                     "INSERT INTO region (region_code, local_code, name, continent_id, country_id, wikipedia_link, keywords) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (new_region.region_code, new_region.local_code, new_region.name,
-                     new_region.continent_id, new_region.country_id, new_region.wikipedia_link,
-                     new_region.keywords))
+                    (new_region.code, new_region.local, new_region.label,
+                     new_region.continent_gid, new_region.country_gid, new_region.wiki,
+                     new_region.tags))
 
                 self.db_conn.commit()
-                yield RegionSavedEvent(new_region)
+                yield RegionSavedNotice(new_region)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveRegionFailedEvent(f"Failed to save the new region: {e}")
+            yield RegionSaveFailedNotice(f"Failed to save the new region: {e}")
 
 
     def process_region_update(self, evt):
@@ -310,18 +315,18 @@ class CoreProcessor:
         try:
             if self.db_conn:
                 cursor = self.db_conn.cursor()
-                modified_region = evt.region()
+                modified_region = evt.get_region()
 
                 cursor.execute(
                     "UPDATE region SET region_code = ?, local_code = ?, name = ?, continent_id = ?, country_id = ?, wikipedia_link = ?, keywords = ? WHERE region_id = ?",
-                    (modified_region.region_code, modified_region.local_code,
-                     modified_region.name, modified_region.continent_id,
-                     modified_region.country_id, modified_region.wikipedia_link,
-                     modified_region.keywords, modified_region.region_id))
+                    (modified_region.code, modified_region.local,
+                     modified_region.label, modified_region.continent_gid,
+                     modified_region.country_gid, modified_region.wiki,
+                     modified_region.tags, modified_region.gid))
 
                 self.db_conn.commit()
-                yield RegionSavedEvent(modified_region)
+                yield RegionSavedNotice(modified_region)
             else:
-                yield ErrorEvent("Open a database first!")
+                yield AppErrorEvent("Open a database first!")
         except Exception as e:
-            yield SaveRegionFailedEvent(f"Failed to save the region: {e}")
+            yield RegionSaveFailedNotice(f"Failed to save the region: {e}")

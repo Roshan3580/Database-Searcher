@@ -2,39 +2,28 @@
 
 import tkinter
 
-
-
-class EventHandler:
-    def initiate_event(self, event):
+class EventMixin:
+    def send_event(self, evt):
         widget = self
-
         if not isinstance(widget, tkinter.Widget):
             pass
-
         while widget.master is not None:
             widget = widget.master
-
         if widget is not None:
-            widget.initiate_event(event)
+            widget.send_event(evt)
 
-
-    def handle_event(self, event):
-        self.on_event(event)
-
-        if isinstance(self, tkinter.Tk) or isinstance(self, tkinter.Widget):
+    def receive_event(self, evt):
+        self.on_receive(evt)
+        if isinstance(self, (tkinter.Tk, tkinter.Widget)):
             for child in self.winfo_children():
                 if not child.winfo_exists():
                     continue
+                if isinstance(child, EventMixin):
+                    child.receive_event(evt)
+        self.after_receive(evt)
 
-                if isinstance(child, EventHandler):
-                    child.handle_event(event)
-
-        self.on_event_post(event)
-
-
-    def on_event(self, event):
+    def on_receive(self, evt):
         pass
 
-
-    def on_event_post(self, event):
+    def after_receive(self, evt):
         pass

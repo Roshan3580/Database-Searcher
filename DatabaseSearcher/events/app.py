@@ -1,25 +1,17 @@
 # DatabaseSearcher/events/app.py
 
-class ErrorEvent:
-    def __init__(self, message: str):
-        self._message = message
-
-
-    def message(self) -> str:
-        return self._message
-
-
+class AppErrorEvent:
+    def __init__(self, msg: str):
+        self._msg = msg
+    def get_message(self) -> str:
+        return self._msg
     def __repr__(self) -> str:
-        return f'{type(self).__name__}: message = {repr(self._message)}'
+        return f'{type(self).__name__}: msg = {repr(self._msg)}'
 
-
-
-class QuitInitiatedEvent:
+class AppQuitRequest:
     def __repr__(self) -> str:
         return f'{type(self).__name__}'
 
-
-
-class EndApplicationEvent:
+class AppShutdownEvent:
     def __repr__(self) -> str:
         return f'{type(self).__name__}'

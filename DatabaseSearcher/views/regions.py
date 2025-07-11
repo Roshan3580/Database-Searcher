@@ -6,383 +6,267 @@ from DatabaseSearcher.events import *
 from .event_handling import EventHandler
 from .events import *
 
-
-
-class RegionsView(tkinter.Frame, EventHandler):
+class RegionPanel(tkinter.Frame, EventHandler):
     def __init__(self, parent):
         super().__init__(parent)
+        search_box = RegionSearchBox(self)
+        search_box.grid(row=0, column=0, sticky=tkinter.NSEW)
+        self._editor = None
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=1)
+        self.columnconfigure(0, weight=1)
 
-        search_view = _RegionsSearchView(self)
-        search_view.grid(row = 0, column = 0, sticky = tkinter.NSEW)
+    def receive_event(self, evt):
+        if isinstance(evt, SaveRegionFailedEvent):
+            tkinter.messagebox.showerror('Region Save Error', evt.reason())
 
-        self._edit_view = None
+    def after_event(self, evt):
+        if isinstance(evt, CancelRegionEdit):
+            self._swap_editor(None)
+        elif isinstance(evt, AddRegionRequest):
+            self._swap_editor(RegionEditor(self, True, True, None))
+        elif isinstance(evt, BeginRegionEdit):
+            self._swap_editor(RegionLoading(self))
+        elif isinstance(evt, RegionLoadedEvent):
+            self._swap_editor(RegionEditor(self, False, True, evt.region()))
+        elif isinstance(evt, RegionSavedEvent):
+            self._swap_editor(RegionEditor(self, False, False, evt.region()))
 
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 1)
-        self.columnconfigure(0, weight = 1)
+    def _swap_editor(self, editor):
+        if self._editor:
+            self._editor.destroy()
+            self._editor = None
+        if editor:
+            self._editor = editor
+            self._editor.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.NSEW)
 
-
-    def on_event(self, event):
-        if isinstance(event, SaveRegionFailedEvent):
-            tkinter.messagebox.showerror('Save Region Failed', event.reason())
-
-
-    def on_event_post(self, event):
-        if isinstance(event, DiscardRegionEvent):
-            self._switch_edit_view(None)
-        elif isinstance(event, NewRegionEvent):
-            self._switch_edit_view(_RegionEditorView(self, True, True, None))
-        elif isinstance(event, StartEditingRegionEvent):
-            self._switch_edit_view(_RegionEditorLoadingView(self))
-        elif isinstance(event, RegionLoadedEvent):
-            self._switch_edit_view(_RegionEditorView(self, False, True, event.region()))
-        elif isinstance(event, RegionSavedEvent):
-            self._switch_edit_view(_RegionEditorView(self, False, False, event.region()))
-
-
-    def _switch_edit_view(self, edit_view):
-        if self._edit_view:
-            self._edit_view.destroy()
-            self._edit_view = None
-
-        if edit_view:
-            self._edit_view = edit_view
-            self._edit_view.grid(row = 1, column = 0, padx = 5, pady = 5, sticky = tkinter.NSEW)
-
-
-
-class _RegionsSearchView(tkinter.LabelFrame, EventHandler):
+class RegionSearchBox(tkinter.LabelFrame, EventHandler):
     def __init__(self, parent):
-        super().__init__(parent, text = 'Region Search')
+        super().__init__(parent, text='Find Region')
+        code_lbl = tkinter.Label(self, text='Region Code:')
+        code_lbl.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+        self._code_var = tkinter.StringVar()
+        self._code_var.trace_add('write', self._on_change)
+        code_entry = tkinter.Entry(self, textvariable=self._code_var, width=10)
+        code_entry.grid(row=0, column=1, sticky=tkinter.W, padx=5, pady=5)
+        local_lbl = tkinter.Label(self, text='Local Code:')
+        local_lbl.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
+        self._local_var = tkinter.StringVar()
+        self._local_var.trace_add('write', self._on_change)
+        local_entry = tkinter.Entry(self, textvariable=self._local_var, width=10)
+        local_entry.grid(row=1, column=1, sticky=tkinter.W, padx=5, pady=5)
+        name_lbl = tkinter.Label(self, text='Region Name:')
+        name_lbl.grid(row=2, column=0, sticky=tkinter.E, padx=5, pady=5)
+        self._name_var = tkinter.StringVar()
+        self._name_var.trace_add('write', self._on_change)
+        name_entry = tkinter.Entry(self, textvariable=self._name_var, width=30)
+        name_entry.grid(row=2, column=1, sticky=tkinter.EW, padx=5, pady=5)
+        self._search_btn = tkinter.Button(self, text='Find', state=tkinter.DISABLED, command=self._do_search)
+        self._search_btn.grid(row=3, column=1, sticky=tkinter.E, padx=5, pady=5)
+        spacer = tkinter.Label(self, text='')
+        spacer.grid(row=4, column=1, sticky=tkinter.NSEW, padx=5, pady=5)
+        self._listbox = tkinter.Listbox(self, height=4, activestyle=tkinter.NONE, selectmode=tkinter.SINGLE)
+        self._listbox.bind('<<ListboxSelect>>', self._on_select)
+        self._listbox.grid(row=0, column=2, rowspan=4, columnspan=1, sticky=tkinter.NSEW, padx=5, pady=5)
+        self._ids = []
+        btn_frame = tkinter.Frame(self)
+        btn_frame.grid(row=5, column=2, sticky=tkinter.E, padx=5, pady=5)
+        self._new_btn = tkinter.Button(btn_frame, text='Add New', command=self._new)
+        self._new_btn.grid(row=0, column=0, padx=5, pady=5)
+        self._edit_btn = tkinter.Button(btn_frame, text='Edit Selected', state=tkinter.DISABLED, command=self._edit)
+        self._edit_btn.grid(row=0, column=1, padx=5, pady=5)
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=0)
+        self.rowconfigure(2, weight=0)
+        self.rowconfigure(3, weight=0)
+        self.rowconfigure(4, weight=1)
+        self.rowconfigure(5, weight=0)
+        self.columnconfigure(0, weight=0)
+        self.columnconfigure(1, weight=1)
+        self.columnconfigure(2, weight=2)
 
-        region_code_label = tkinter.Label(self, text = 'Region Code: ')
-        region_code_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
+    def _do_search(self):
+        self.send_event(ClearRegionResults())
+        self.send_event(StartRegionSearchEvent(self._get_code(), self._get_local(), self._get_name()))
 
-        self._search_region_code = tkinter.StringVar()
-        self._search_region_code.trace_add('write', self._on_search_changed)
+    def _get_code(self):
+        code = self._code_var.get().strip()
+        return code if code else None
 
-        region_code_entry = tkinter.Entry(self, textvariable = self._search_region_code, width = 10)
-        region_code_entry.grid(row = 0, column = 1, sticky = tkinter.W, padx = 5, pady = 5)
+    def _get_local(self):
+        local = self._local_var.get().strip()
+        return local if local else None
 
-        local_code_label = tkinter.Label(self, text = 'Local Code: ')
-        local_code_label.grid(row = 1, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
+    def _get_name(self):
+        name = self._name_var.get().strip()
+        return name if name else None
 
-        self._search_local_code = tkinter.StringVar()
-        self._search_local_code.trace_add('write', self._on_search_changed)
+    def _get_selected_id(self):
+        idx, *_ = self._listbox.curselection()
+        return self._ids[idx]
 
-        local_code_entry = tkinter.Entry(self, textvariable = self._search_local_code, width = 10)
-        local_code_entry.grid(row = 1, column = 1, sticky = tkinter.W, padx = 5, pady = 5)
-
-        name_label = tkinter.Label(self, text = 'Name: ')
-        name_label.grid(row = 2, column = 0, sticky = tkinter.E, padx = 5, pady = 5)
-
-        self._search_name = tkinter.StringVar()
-        self._search_name.trace_add('write', self._on_search_changed)
-
-        name_entry = tkinter.Entry(self, textvariable = self._search_name, width = 30)
-        name_entry.grid(row = 2, column = 1, sticky = tkinter.EW, padx = 5, pady = 5)
-
-        self._search_button = tkinter.Button(
-            self, text = 'Search', state = tkinter.DISABLED,
-            command = self._on_search_button_clicked)
-
-        self._search_button.grid(row = 3, column = 1, sticky = tkinter.E, padx = 5, pady = 5)
-
-        empty_area = tkinter.Label(self, text = '')
-        empty_area.grid(row = 4, column = 1, sticky = tkinter.NSEW, padx = 5, pady = 5)
-
-        self._search_list = tkinter.Listbox(
-            self, height = 4,
-            activestyle = tkinter.NONE, selectmode = tkinter.SINGLE)
-
-        self._search_list.bind('<<ListboxSelect>>', self._on_search_selection_changed)
-        self._search_list.grid(
-            row = 0, column = 2, rowspan = 4, columnspan = 1, sticky = tkinter.NSEW,
-            padx = 5, pady = 5)
-
-        self._search_region_ids = []
-
-        button_frame = tkinter.Frame(self)
-        button_frame.grid(row = 5, column = 2, sticky = tkinter.E, padx = 5, pady = 5)
-
-        self._new_button = tkinter.Button(
-            button_frame, text = 'New Region',
-            command = self._on_new_region)
-
-        self._new_button.grid(row = 0, column = 0, padx = 5, pady = 5)
-
-        self._edit_button = tkinter.Button(
-            button_frame, text = 'Edit Region', state = tkinter.DISABLED,
-            command = self._on_edit_region)
-
-        self._edit_button.grid(row = 0, column = 1, padx = 5, pady = 5)
-
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 0)
-        self.rowconfigure(2, weight = 0)
-        self.rowconfigure(3, weight = 0)
-        self.rowconfigure(4, weight = 1)
-        self.rowconfigure(5, weight = 0)
-        self.columnconfigure(0, weight = 0)
-        self.columnconfigure(1, weight = 1)
-        self.columnconfigure(2, weight = 2)
-
-
-    def _on_search_button_clicked(self):
-        self.initiate_event(ClearRegionsSearchListEvent())
-        self.initiate_event(StartRegionSearchEvent(
-            self._get_search_region_code(), self._get_search_local_code(),
-            self._get_search_name()))
-
-
-    def _get_search_region_code(self):
-        code = self._search_region_code.get().strip()
-        return code if len(code) > 0 else None
-
-
-    def _get_search_local_code(self):
-        code = self._search_local_code.get().strip()
-        return code if len(code) > 0 else None
-
-
-    def _get_search_name(self):
-        name = self._search_name.get().strip()
-        return name if len(name) > 0 else None
-
-
-    def _get_selected_search_region_id(self):
-        selection, *_ = self._search_list.curselection()
-        return self._search_region_ids[selection]
-
-
-    def _on_search_changed(self, *args):
-        if len(self._search_region_code.get().strip()) > 0 \
-                or len(self._search_local_code.get().strip()) > 0 \
-                or len(self._search_name.get().strip()) > 0:
-            new_state = tkinter.NORMAL
+    def _on_change(self, *args):
+        if self._code_var.get().strip() or self._local_var.get().strip() or self._name_var.get().strip():
+            self._search_btn['state'] = tkinter.NORMAL
         else:
-            new_state = tkinter.DISABLED
-
-        self._search_button['state'] = new_state
+            self._search_btn['state'] = tkinter.DISABLED
         return True
 
-
-    def _on_search_selection_changed(self, event):
+    def _on_select(self, event):
         if event.widget.curselection():
-            new_state = tkinter.NORMAL
+            self._edit_btn['state'] = tkinter.NORMAL
         else:
-            new_state = tkinter.DISABLED
+            self._edit_btn['state'] = tkinter.DISABLED
 
-        self._edit_button['state'] = new_state
+    def _new(self):
+        self.send_event(CancelRegionEdit())
+        self.send_event(AddRegionRequest())
 
+    def _edit(self):
+        self.send_event(CancelRegionEdit())
+        self.send_event(BeginRegionEdit())
+        self.send_event(LoadRegionEvent(self._get_selected_id()))
 
-    def _on_new_region(self):
-        self.initiate_event(DiscardRegionEvent())
-        self.initiate_event(NewRegionEvent())
+    def receive_event(self, evt):
+        if isinstance(evt, ClearRegionResults):
+            self._listbox.delete(0, tkinter.END)
+            self._ids = []
+            self._edit_btn['state'] = tkinter.DISABLED
+        elif isinstance(evt, RegionSearchResultEvent):
+            label = f'{evt.region().region_code} | {evt.region().name}'
+            self._listbox.insert(tkinter.END, label)
+            self._ids.append(evt.region().region_id)
 
-
-    def _on_edit_region(self):
-        self.initiate_event(DiscardRegionEvent())
-        self.initiate_event(StartEditingRegionEvent())
-        self.initiate_event(LoadRegionEvent(self._get_selected_search_region_id()))
-
-
-    def on_event(self, event):
-        if isinstance(event, ClearRegionsSearchListEvent):
-            self._search_list.delete(0, tkinter.END)
-            self._search_region_ids = []
-            self._edit_button['state'] = tkinter.DISABLED
-        elif isinstance(event, RegionSearchResultEvent):
-            display_name = f'{event.region().region_code} - {event.region().name}'
-            self._search_list.insert(tkinter.END, display_name)
-            self._search_region_ids.append(event.region().region_id)
-
-
-
-class _RegionEditorLoadingView(tkinter.LabelFrame, EventHandler):
+class RegionLoading(tkinter.LabelFrame, EventHandler):
     def __init__(self, parent):
         super().__init__(parent)
+        loading = tkinter.Label(self, text='Please wait, loading...')
+        loading.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.W)
 
-        loading_label = tkinter.Label(self, text = 'Loading...')
-        loading_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.W)
-
-
-
-class _RegionEditorView(tkinter.LabelFrame, EventHandler):
-    def __init__(self, parent, is_new, is_editable, region):
+class RegionEditor(tkinter.LabelFrame, EventHandler):
+    def __init__(self, parent, is_new, can_edit, region):
         if is_new:
-            frame_text = 'New Region'
-        elif is_editable:
-            frame_text = 'Edit Region'
+            title = 'Create Region'
+        elif can_edit:
+            title = 'Update Region'
         else:
-            frame_text = 'Region Saved'
-
-        super().__init__(parent, text = frame_text)
-
+            title = 'Region Saved!'
+        super().__init__(parent, text=title)
         self._is_new = is_new
-        self._region_id = region.region_id if region else None
-        region_code = region.region_code if region and region.region_code else ''
-        local_code = region.local_code if region and region.local_code else ''
+        self._rid = region.region_id if region else None
+        code = region.region_code if region and region.region_code else ''
+        local = region.local_code if region and region.local_code else ''
         name = region.name if region and region.name else ''
         continent_id = region.continent_id if region and region.continent_id else 0
         country_id = region.country_id if region and region.country_id else 0
-        wikipedia_link = region.wikipedia_link if region and region.wikipedia_link else ''
+        wiki = region.wikipedia_link if region and region.wikipedia_link else ''
         keywords = region.keywords if region and region.keywords else ''
-
-        self._region_code = tkinter.StringVar()
-        self._region_code.set(region_code)
-
-        self._local_code = tkinter.StringVar()
-        self._local_code.set(local_code)
-
-        self._region_name = tkinter.StringVar()
-        self._region_name.set(name)
-
-        self._continent_id = tkinter.StringVar()
-        self._continent_id.set(str(continent_id))
-
-        self._country_id = tkinter.StringVar()
-        self._country_id.set(str(country_id))
-
-        self._wikipedia_link = tkinter.StringVar()
-        self._wikipedia_link.set(wikipedia_link)
-
-        self._keywords = tkinter.StringVar()
-        self._keywords.set(keywords)
-
-        region_id_label = tkinter.Label(self, text = 'Region ID: ')
-        region_id_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        region_id_value_label_text = f'{self._region_id if self._region_id else "(New)"}'
-        region_id_value_label = tkinter.Label(self, text = region_id_value_label_text)
-        region_id_value_label.grid(row = 0, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        region_code_label = tkinter.Label(self, text = 'Region Code: ')
-        region_code_label.grid(row = 1, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            region_code_entry = tkinter.Entry(self, textvariable = self._region_code, width = 10)
+        self._code_var = tkinter.StringVar(value=code)
+        self._local_var = tkinter.StringVar(value=local)
+        self._name_var = tkinter.StringVar(value=name)
+        self._continent_var = tkinter.StringVar(value=str(continent_id))
+        self._country_var = tkinter.StringVar(value=str(country_id))
+        self._wiki_var = tkinter.StringVar(value=wiki)
+        self._keywords_var = tkinter.StringVar(value=keywords)
+        id_lbl = tkinter.Label(self, text='ID:')
+        id_lbl.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+        id_val = tkinter.Label(self, text=f'{self._rid if self._rid else "(New)"}')
+        id_val.grid(row=0, column=1, padx=5, pady=5, sticky=tkinter.W)
+        code_lbl = tkinter.Label(self, text='Code:')
+        code_lbl.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            code_entry = tkinter.Entry(self, textvariable=self._code_var, width=10)
         else:
-            region_code_entry = tkinter.Label(self, textvariable = self._region_code)
-
-        region_code_entry.grid(row = 1, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        local_code_label = tkinter.Label(self, text = 'Local Code: ')
-        local_code_label.grid(row = 2, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            local_code_entry = tkinter.Entry(self, textvariable = self._local_code, width = 10)
+            code_entry = tkinter.Label(self, textvariable=self._code_var)
+        code_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tkinter.W)
+        local_lbl = tkinter.Label(self, text='Local:')
+        local_lbl.grid(row=2, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            local_entry = tkinter.Entry(self, textvariable=self._local_var, width=10)
         else:
-            local_code_entry = tkinter.Label(self, textvariable = self._local_code)
-
-        local_code_entry.grid(row = 2, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        name_label = tkinter.Label(self, text = 'Name: ')
-        name_label.grid(row = 3, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            name_entry = tkinter.Entry(self, textvariable = self._region_name, width = 30)
+            local_entry = tkinter.Label(self, textvariable=self._local_var)
+        local_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tkinter.W)
+        name_lbl = tkinter.Label(self, text='Name:')
+        name_lbl.grid(row=3, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            name_entry = tkinter.Entry(self, textvariable=self._name_var, width=30)
         else:
-            name_entry = tkinter.Label(self, textvariable = self._region_name)
-
-        name_entry.grid(row = 3, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        continent_id_label = tkinter.Label(self, text = 'Continent ID: ')
-        continent_id_label.grid(row = 4, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            continent_id_entry = tkinter.Entry(self, textvariable = self._continent_id, width = 10)
+            name_entry = tkinter.Label(self, textvariable=self._name_var)
+        name_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tkinter.W)
+        continent_lbl = tkinter.Label(self, text='Continent ID:')
+        continent_lbl.grid(row=4, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            continent_entry = tkinter.Entry(self, textvariable=self._continent_var, width=10)
         else:
-            continent_id_entry = tkinter.Label(self, textvariable = self._continent_id)
-
-        continent_id_entry.grid(row = 4, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        country_id_label = tkinter.Label(self, text = 'Country ID: ')
-        country_id_label.grid(row = 5, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            country_id_entry = tkinter.Entry(self, textvariable = self._country_id, width = 10)
+            continent_entry = tkinter.Label(self, textvariable=self._continent_var)
+        continent_entry.grid(row=4, column=1, padx=5, pady=5, sticky=tkinter.W)
+        country_lbl = tkinter.Label(self, text='Country ID:')
+        country_lbl.grid(row=5, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            country_entry = tkinter.Entry(self, textvariable=self._country_var, width=10)
         else:
-            country_id_entry = tkinter.Label(self, textvariable = self._country_id)
-
-        country_id_entry.grid(row = 5, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        wikipedia_link_label = tkinter.Label(self, text = 'Wikipedia Link: ')
-        wikipedia_link_label.grid(row = 6, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            wikipedia_link_entry = tkinter.Entry(self, textvariable = self._wikipedia_link, width = 50)
+            country_entry = tkinter.Label(self, textvariable=self._country_var)
+        country_entry.grid(row=5, column=1, padx=5, pady=5, sticky=tkinter.W)
+        wiki_lbl = tkinter.Label(self, text='Wikipedia:')
+        wiki_lbl.grid(row=6, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            wiki_entry = tkinter.Entry(self, textvariable=self._wiki_var, width=50)
         else:
-            wikipedia_link_entry = tkinter.Label(self, textvariable = self._wikipedia_link)
-
-        wikipedia_link_entry.grid(row = 6, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        keywords_label = tkinter.Label(self, text = 'Keywords: ')
-        keywords_label.grid(row = 7, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            keywords_entry = tkinter.Entry(self, textvariable = self._keywords, width = 50)
+            wiki_entry = tkinter.Label(self, textvariable=self._wiki_var)
+        wiki_entry.grid(row=6, column=1, padx=5, pady=5, sticky=tkinter.W)
+        keywords_lbl = tkinter.Label(self, text='Keywords:')
+        keywords_lbl.grid(row=7, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            keywords_entry = tkinter.Entry(self, textvariable=self._keywords_var, width=50)
         else:
-            keywords_entry = tkinter.Label(self, textvariable = self._keywords)
+            keywords_entry = tkinter.Label(self, textvariable=self._keywords_var)
+        keywords_entry.grid(row=7, column=1, padx=5, pady=5, sticky=tkinter.W)
+        btn_frame = tkinter.Frame(self)
+        btn_frame.grid(row=9, column=1, padx=5, pady=5, sticky=tkinter.SE)
+        if can_edit:
+            save_btn = tkinter.Button(btn_frame, text='Save', command=self._save)
+            save_btn.grid(row=0, column=0, padx=5, pady=5)
+        discard_btn = tkinter.Button(btn_frame, text='Cancel', command=self._discard)
+        discard_btn.grid(row=0, column=1, padx=5, pady=5)
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=0)
+        self.rowconfigure(2, weight=0)
+        self.rowconfigure(3, weight=0)
+        self.rowconfigure(4, weight=0)
+        self.rowconfigure(5, weight=0)
+        self.rowconfigure(6, weight=0)
+        self.rowconfigure(7, weight=0)
+        self.rowconfigure(8, weight=1)
+        self.rowconfigure(9, weight=0)
+        self.columnconfigure(0, weight=0)
+        self.columnconfigure(1, weight=1)
 
-        keywords_entry.grid(row = 7, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        button_frame = tkinter.Frame(self)
-        button_frame.grid(row = 9, column = 1, padx = 5, pady = 5, sticky = tkinter.SE)
-
-        if is_editable:
-            save_button = tkinter.Button(button_frame, text = 'Save', command = self._on_save)
-            save_button.grid(row = 0, column = 0, padx = 5, pady = 5)
-
-        discard_button = tkinter.Button(button_frame, text = 'Discard', command = self._on_discard)
-        discard_button.grid(row = 0, column = 1, padx = 5, pady = 5)
-
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 0)
-        self.rowconfigure(2, weight = 0)
-        self.rowconfigure(3, weight = 0)
-        self.rowconfigure(4, weight = 0)
-        self.rowconfigure(5, weight = 0)
-        self.rowconfigure(6, weight = 0)
-        self.rowconfigure(7, weight = 0)
-        self.rowconfigure(8, weight = 1)
-        self.rowconfigure(9, weight = 0)
-        self.columnconfigure(0, weight = 0)
-        self.columnconfigure(1, weight = 1)
-
-
-    def _on_save(self):
+    def _save(self):
         region = self._make_region()
-
         if region:
             if self._is_new:
-                self.initiate_event(SaveNewRegionEvent(region))
+                self.send_event(SaveNewRegionEvent(region))
             else:
-                self.initiate_event(SaveRegionEvent(region))
+                self.send_event(SaveRegionEvent(region))
 
-
-    def _on_discard(self):
-        self.initiate_event(DiscardRegionEvent())
-
+    def _discard(self):
+        self.send_event(CancelRegionEdit())
 
     def _make_region(self):
-        failure_reasons = []
-
+        errors = []
         try:
-            continent_id = int(self._continent_id.get())
+            continent_id = int(self._continent_var.get())
         except ValueError:
-            failure_reasons.append('Continent ID must be an integer')
-
+            errors.append('Continent ID must be an integer')
         try:
-            country_id = int(self._country_id.get())
+            country_id = int(self._country_var.get())
         except ValueError:
-            failure_reasons.append('Country ID must be an integer')
-
-        if failure_reasons:
-            tkinter.messagebox.showerror('Save Region Failed', '\n'.join(failure_reasons))
+            errors.append('Country ID must be an integer')
+        if errors:
+            tkinter.messagebox.showerror('Region Save Error', '\n'.join(errors))
             return None
         else:
             return Region(
-                self._region_id, self._region_code.get(), self._local_code.get(),
-                self._region_name.get(), continent_id, country_id,
-                self._wikipedia_link.get(), self._keywords.get())
+                self._rid, self._code_var.get(), self._local_var.get(),
+                self._name_var.get(), continent_id, country_id,
+                self._wiki_var.get(), self._keywords_var.get())

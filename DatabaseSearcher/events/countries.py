@@ -2,134 +2,79 @@
 
 from collections import namedtuple
 
-
-
-Country = namedtuple(
-    'Country',
-    ['country_id', 'country_code', 'name', 'continent_id', 'wikipedia_link', 'keywords'])
-
-Country.__annotations__ = {
-    'country_id': int | None,
-    'country_code': str | None,
-    'name': str | None,
-    'continent_id': int | None,
-    'wikipedia_link': str | None,
-    'keywords': str | None
+GeoCountry = namedtuple('GeoCountry', ['gid', 'code', 'label', 'continent_gid', 'wiki', 'tags'])
+GeoCountry.__annotations__ = {
+    'gid': int | None,
+    'code': str | None,
+    'label': str | None,
+    'continent_gid': int | None,
+    'wiki': str | None,
+    'tags': str | None
 }
 
-
-
-class StartCountrySearchEvent:
-    def __init__(self, country_code: str, name: str):
-        self._country_code = country_code
-        self._name = name
-
-
-    def country_code(self) -> str:
-        return self._country_code
-
-
-    def name(self) -> str:
-        return self._name
-
-
+class CountrySearchRequest:
+    def __init__(self, code: str, label: str):
+        self._code = code
+        self._label = label
+    def get_code(self) -> str:
+        return self._code
+    def get_label(self) -> str:
+        return self._label
     def __repr__(self) -> str:
-        return f'{type(self).__name__}: country_code = {repr(self._country_code)}, name = {repr(self._name)}'
+        return f'{type(self).__name__}: code = {repr(self._code)}, label = {repr(self._label)}'
 
-
-
-class CountrySearchResultEvent:
-    def __init__(self, country: Country):
+class CountrySearchResult:
+    def __init__(self, country: GeoCountry):
         self._country = country
-
-
-    def country(self) -> Country:
+    def get_country(self) -> GeoCountry:
         return self._country
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: country = {repr(self._country)}'
 
-
-
-class LoadCountryEvent:
-    def __init__(self, country_id: int):
-        self._country_id = country_id
-
-
-    def country_id(self) -> int:
-        return self._country_id
-
-
+class CountryLoadRequest:
+    def __init__(self, gid: int):
+        self._gid = gid
+    def get_id(self) -> int:
+        return self._gid
     def __repr__(self) -> str:
-        return f'{type(self).__name__}: country_id = {repr(self._country_id)}'
+        return f'{type(self).__name__}: gid = {repr(self._gid)}'
 
-
-
-class CountryLoadedEvent:
-    def __init__(self, country: Country):
+class CountryLoadedNotice:
+    def __init__(self, country: GeoCountry):
         self._country = country
-
-
-    def country(self) -> Country:
+    def get_country(self) -> GeoCountry:
         return self._country
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: country = {repr(self._country)}'
 
-
-
-class SaveNewCountryEvent:
-    def __init__(self, country: Country):
+class CountryCreateRequest:
+    def __init__(self, country: GeoCountry):
         self._country = country
-
-
-    def country(self) -> Country:
+    def get_country(self) -> GeoCountry:
         return self._country
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: country = {repr(self._country)}'
 
-
-
-class SaveCountryEvent:
-    def __init__(self, country: Country):
+class CountryUpdateRequest:
+    def __init__(self, country: GeoCountry):
         self._country = country
-
-
-    def country(self) -> Country:
+    def get_country(self) -> GeoCountry:
         return self._country
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: country = {repr(self._country)}'
 
-
-
-class CountrySavedEvent:
-    def __init__(self, country: Country):
+class CountrySavedNotice:
+    def __init__(self, country: GeoCountry):
         self._country = country
-
-
-    def country(self) -> Country:
+    def get_country(self) -> GeoCountry:
         return self._country
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: country = {repr(self._country)}'
 
-
-
-class SaveCountryFailedEvent:
+class CountrySaveFailedNotice:
     def __init__(self, reason: str):
         self._reason = reason
-
-
-    def reason(self) -> str:
+    def get_reason(self) -> str:
         return self._reason
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: reason = {repr(self._reason)}'

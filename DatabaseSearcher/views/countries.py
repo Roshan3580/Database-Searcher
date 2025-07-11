@@ -4,325 +4,234 @@ import tkinter
 import tkinter.messagebox
 from DatabaseSearcher.events import *
 from .event_handling import EventHandler
-from .events import *
+from .events import (
+    CancelCountryEdit, AddCountryRequest, BeginCountryEdit, ClearCountryResults,
+    CountrySearchResult, CountryLoadedNotice, CountrySavedNotice, CountrySaveFailedNotice,
+    CountryCreateRequest, CountryUpdateRequest
+)
+from DatabaseSearcher.events.countries import GeoCountry, CountryLoadRequest
 
-
-
-class CountriesView(tkinter.Frame, EventHandler):
+class CountryPanel(tkinter.Frame, EventHandler):
     def __init__(self, parent):
         super().__init__(parent)
+        search_box = CountrySearchBox(self)
+        search_box.grid(row=0, column=0, sticky=tkinter.NSEW)
+        self._editor = None
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=1)
+        self.columnconfigure(0, weight=1)
 
-        search_view = _CountriesSearchView(self)
-        search_view.grid(row = 0, column = 0, sticky = tkinter.NSEW)
+    def receive_event(self, evt):
+        if isinstance(evt, CountrySaveFailedNotice):
+            tkinter.messagebox.showerror('Country Save Error', evt.get_reason())
 
-        self._edit_view = None
+    def after_event(self, evt):
+        if isinstance(evt, CancelCountryEdit):
+            self._swap_editor(None)
+        elif isinstance(evt, AddCountryRequest):
+            self._swap_editor(CountryEditor(self, True, True, None))
+        elif isinstance(evt, BeginCountryEdit):
+            self._swap_editor(CountryLoading(self))
+        elif isinstance(evt, CountryLoadedNotice):
+            self._swap_editor(CountryEditor(self, False, True, evt.get_country()))
+        elif isinstance(evt, CountrySavedNotice):
+            self._swap_editor(CountryEditor(self, False, False, evt.get_country()))
 
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 1)
-        self.columnconfigure(0, weight = 1)
+    def _swap_editor(self, editor):
+        if self._editor:
+            self._editor.destroy()
+            self._editor = None
+        if editor:
+            self._editor = editor
+            self._editor.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.NSEW)
 
-
-    def on_event(self, event):
-        if isinstance(event, SaveCountryFailedEvent):
-            tkinter.messagebox.showerror('Save Country Failed', event.reason())
-
-
-    def on_event_post(self, event):
-        if isinstance(event, DiscardCountryEvent):
-            self._switch_edit_view(None)
-        elif isinstance(event, NewCountryEvent):
-            self._switch_edit_view(_CountryEditorView(self, True, True, None))
-        elif isinstance(event, StartEditingCountryEvent):
-            self._switch_edit_view(_CountryEditorLoadingView(self))
-        elif isinstance(event, CountryLoadedEvent):
-            self._switch_edit_view(_CountryEditorView(self, False, True, event.country()))
-        elif isinstance(event, CountrySavedEvent):
-            self._switch_edit_view(_CountryEditorView(self, False, False, event.country()))
-
-
-    def _switch_edit_view(self, edit_view):
-        if self._edit_view:
-            self._edit_view.destroy()
-            self._edit_view = None
-
-        if edit_view:
-            self._edit_view = edit_view
-            self._edit_view.grid(row = 1, column = 0, padx = 5, pady = 5, sticky = tkinter.NSEW)
-
-
-
-class _CountriesSearchView(tkinter.LabelFrame, EventHandler):
+class CountrySearchBox(tkinter.LabelFrame, EventHandler):
     def __init__(self, parent):
-        super().__init__(parent, text = 'Country Search')
+        super().__init__(parent, text='Find Country')
+        code_lbl = tkinter.Label(self, text='Country Code:')
+        code_lbl.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+        self._code_var = tkinter.StringVar()
+        self._code_var.trace_add('write', self._on_change)
+        code_entry = tkinter.Entry(self, textvariable=self._code_var, width=10)
+        code_entry.grid(row=0, column=1, sticky=tkinter.W, padx=5, pady=5)
+        name_lbl = tkinter.Label(self, text='Country Name:')
+        name_lbl.grid(row=1, column=0, sticky=tkinter.E, padx=5, pady=5)
+        self._name_var = tkinter.StringVar()
+        self._name_var.trace_add('write', self._on_change)
+        name_entry = tkinter.Entry(self, textvariable=self._name_var, width=30)
+        name_entry.grid(row=1, column=1, sticky=tkinter.EW, padx=5, pady=5)
+        self._search_btn = tkinter.Button(self, text='Find', state=tkinter.DISABLED, command=self._do_search)
+        self._search_btn.grid(row=2, column=1, sticky=tkinter.E, padx=5, pady=5)
+        spacer = tkinter.Label(self, text='')
+        spacer.grid(row=3, column=1, sticky=tkinter.NSEW, padx=5, pady=5)
+        self._listbox = tkinter.Listbox(self, height=4, activestyle=tkinter.NONE, selectmode=tkinter.SINGLE)
+        self._listbox.bind('<<ListboxSelect>>', self._on_select)
+        self._listbox.grid(row=0, column=2, rowspan=4, columnspan=1, sticky=tkinter.NSEW, padx=5, pady=5)
+        self._ids = []
+        btn_frame = tkinter.Frame(self)
+        btn_frame.grid(row=4, column=2, sticky=tkinter.E, padx=5, pady=5)
+        self._new_btn = tkinter.Button(btn_frame, text='Add New', command=self._new)
+        self._new_btn.grid(row=0, column=0, padx=5, pady=5)
+        self._edit_btn = tkinter.Button(btn_frame, text='Edit Selected', state=tkinter.DISABLED, command=self._edit)
+        self._edit_btn.grid(row=0, column=1, padx=5, pady=5)
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=0)
+        self.rowconfigure(2, weight=0)
+        self.rowconfigure(3, weight=1)
+        self.rowconfigure(4, weight=0)
+        self.columnconfigure(0, weight=0)
+        self.columnconfigure(1, weight=1)
+        self.columnconfigure(2, weight=2)
 
-        code_label = tkinter.Label(self, text = 'Country Code: ')
-        code_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
+    def _do_search(self):
+        self.send_event(ClearCountryResults())
+        self.send_event(CountrySearchRequest(self._get_code(), self._get_name()))
 
-        self._search_code = tkinter.StringVar()
-        self._search_code.trace_add('write', self._on_search_changed)
+    def _get_code(self):
+        code = self._code_var.get().strip()
+        return code if code else None
 
-        code_entry = tkinter.Entry(self, textvariable = self._search_code, width = 10)
-        code_entry.grid(row = 0, column = 1, sticky = tkinter.W, padx = 5, pady = 5)
+    def _get_name(self):
+        name = self._name_var.get().strip()
+        return name if name else None
 
-        name_label = tkinter.Label(self, text = 'Name: ')
-        name_label.grid(row = 1, column = 0, sticky = tkinter.E, padx = 5, pady = 5)
+    def _get_selected_id(self):
+        idx, *_ = self._listbox.curselection()
+        return self._ids[idx]
 
-        self._search_name = tkinter.StringVar()
-        self._search_name.trace_add('write', self._on_search_changed)
-
-        name_entry = tkinter.Entry(self, textvariable = self._search_name, width = 30)
-        name_entry.grid(row = 1, column = 1, sticky = tkinter.EW, padx = 5, pady = 5)
-
-        self._search_button = tkinter.Button(
-            self, text = 'Search', state = tkinter.DISABLED,
-            command = self._on_search_button_clicked)
-
-        self._search_button.grid(row = 2, column = 1, sticky = tkinter.E, padx = 5, pady = 5)
-
-        empty_area = tkinter.Label(self, text = '')
-        empty_area.grid(row = 3, column = 1, sticky = tkinter.NSEW, padx = 5, pady = 5)
-
-        self._search_list = tkinter.Listbox(
-            self, height = 4,
-            activestyle = tkinter.NONE, selectmode = tkinter.SINGLE)
-
-        self._search_list.bind('<<ListboxSelect>>', self._on_search_selection_changed)
-        self._search_list.grid(
-            row = 0, column = 2, rowspan = 4, columnspan = 1, sticky = tkinter.NSEW,
-            padx = 5, pady = 5)
-
-        self._search_country_ids = []
-
-        button_frame = tkinter.Frame(self)
-        button_frame.grid(row = 4, column = 2, sticky = tkinter.E, padx = 5, pady = 5)
-
-        self._new_button = tkinter.Button(
-            button_frame, text = 'New Country',
-            command = self._on_new_country)
-
-        self._new_button.grid(row = 0, column = 0, padx = 5, pady = 5)
-
-        self._edit_button = tkinter.Button(
-            button_frame, text = 'Edit Country', state = tkinter.DISABLED,
-            command = self._on_edit_country)
-
-        self._edit_button.grid(row = 0, column = 1, padx = 5, pady = 5)
-
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 0)
-        self.rowconfigure(2, weight = 0)
-        self.rowconfigure(3, weight = 1)
-        self.rowconfigure(4, weight = 0)
-        self.columnconfigure(0, weight = 0)
-        self.columnconfigure(1, weight = 1)
-        self.columnconfigure(2, weight = 2)
-
-
-    def _on_search_button_clicked(self):
-        self.initiate_event(ClearCountriesSearchListEvent())
-        self.initiate_event(StartCountrySearchEvent(self._get_search_code(), self._get_search_name()))
-
-
-    def _get_search_code(self):
-        code = self._search_code.get().strip()
-        return code if len(code) > 0 else None
-
-
-    def _get_search_name(self):
-        name = self._search_name.get().strip()
-        return name if len(name) > 0 else None
-
-
-    def _get_selected_search_country_id(self):
-        selection, *_ = self._search_list.curselection()
-        return self._search_country_ids[selection]
-
-
-    def _on_search_changed(self, *args):
-        if len(self._search_code.get().strip()) > 0 or len(self._search_name.get().strip()) > 0:
-            new_state = tkinter.NORMAL
+    def _on_change(self, *args):
+        if self._code_var.get().strip() or self._name_var.get().strip():
+            self._search_btn['state'] = tkinter.NORMAL
         else:
-            new_state = tkinter.DISABLED
-
-        self._search_button['state'] = new_state
+            self._search_btn['state'] = tkinter.DISABLED
         return True
 
-
-    def _on_search_selection_changed(self, event):
+    def _on_select(self, event):
         if event.widget.curselection():
-            new_state = tkinter.NORMAL
+            self._edit_btn['state'] = tkinter.NORMAL
         else:
-            new_state = tkinter.DISABLED
+            self._edit_btn['state'] = tkinter.DISABLED
 
-        self._edit_button['state'] = new_state
+    def _new(self):
+        self.send_event(CancelCountryEdit())
+        self.send_event(AddCountryRequest())
 
+    def _edit(self):
+        self.send_event(CancelCountryEdit())
+        self.send_event(BeginCountryEdit())
+        self.send_event(CountryLoadRequest(self._get_selected_id()))
 
-    def _on_new_country(self):
-        self.initiate_event(DiscardCountryEvent())
-        self.initiate_event(NewCountryEvent())
+    def receive_event(self, evt):
+        if isinstance(evt, ClearCountryResults):
+            self._listbox.delete(0, tkinter.END)
+            self._ids = []
+            self._edit_btn['state'] = tkinter.DISABLED
+        elif isinstance(evt, CountrySearchResult):
+            label = f'{evt.get_country().code} | {evt.get_country().label}'
+            self._listbox.insert(tkinter.END, label)
+            self._ids.append(evt.get_country().gid)
 
-
-    def _on_edit_country(self):
-        self.initiate_event(DiscardCountryEvent())
-        self.initiate_event(StartEditingCountryEvent())
-        self.initiate_event(LoadCountryEvent(self._get_selected_search_country_id()))
-
-
-    def on_event(self, event):
-        if isinstance(event, ClearCountriesSearchListEvent):
-            self._search_list.delete(0, tkinter.END)
-            self._search_country_ids = []
-            self._edit_button['state'] = tkinter.DISABLED
-        elif isinstance(event, CountrySearchResultEvent):
-            display_name = f'{event.country().country_code} - {event.country().name}'
-            self._search_list.insert(tkinter.END, display_name)
-            self._search_country_ids.append(event.country().country_id)
-
-
-
-class _CountryEditorLoadingView(tkinter.LabelFrame, EventHandler):
+class CountryLoading(tkinter.LabelFrame, EventHandler):
     def __init__(self, parent):
         super().__init__(parent)
+        loading = tkinter.Label(self, text='Please wait, loading...')
+        loading.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.W)
 
-        loading_label = tkinter.Label(self, text = 'Loading...')
-        loading_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.W)
-
-
-
-class _CountryEditorView(tkinter.LabelFrame, EventHandler):
-    def __init__(self, parent, is_new, is_editable, country):
+class CountryEditor(tkinter.LabelFrame, EventHandler):
+    def __init__(self, parent, is_new, can_edit, country):
         if is_new:
-            frame_text = 'New Country'
-        elif is_editable:
-            frame_text = 'Edit Country'
+            title = 'Create Country'
+        elif can_edit:
+            title = 'Update Country'
         else:
-            frame_text = 'Country Saved'
-
-        super().__init__(parent, text = frame_text)
-
+            title = 'Country Saved!'
+        super().__init__(parent, text=title)
         self._is_new = is_new
-        self._country_id = country.country_id if country else None
+        self._cid = country.country_id if country else None
         code = country.country_code if country and country.country_code else ''
         name = country.name if country and country.name else ''
         continent_id = country.continent_id if country and country.continent_id else 0
-        wikipedia_link = country.wikipedia_link if country and country.wikipedia_link else ''
+        wiki = country.wikipedia_link if country and country.wikipedia_link else ''
         keywords = country.keywords if country and country.keywords else ''
-
-        self._country_code = tkinter.StringVar()
-        self._country_code.set(code)
-
-        self._country_name = tkinter.StringVar()
-        self._country_name.set(name)
-
-        self._continent_id = tkinter.StringVar()
-        self._continent_id.set(str(continent_id))
-
-        self._wikipedia_link = tkinter.StringVar()
-        self._wikipedia_link.set(wikipedia_link)
-
-        self._keywords = tkinter.StringVar()
-        self._keywords.set(keywords)
-
-        country_id_label = tkinter.Label(self, text = 'Country ID: ')
-        country_id_label.grid(row = 0, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        country_id_value_label_text = f'{self._country_id if self._country_id else "(New)"}'
-        country_id_value_label = tkinter.Label(self, text = country_id_value_label_text)
-        country_id_value_label.grid(row = 0, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        code_label = tkinter.Label(self, text = 'Country Code: ')
-        code_label.grid(row = 1, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            code_entry = tkinter.Entry(self, textvariable = self._country_code, width = 10)
+        self._code_var = tkinter.StringVar(value=code)
+        self._name_var = tkinter.StringVar(value=name)
+        self._continent_var = tkinter.StringVar(value=str(continent_id))
+        self._wiki_var = tkinter.StringVar(value=wiki)
+        self._keywords_var = tkinter.StringVar(value=keywords)
+        id_lbl = tkinter.Label(self, text='ID:')
+        id_lbl.grid(row=0, column=0, padx=5, pady=5, sticky=tkinter.E)
+        id_val = tkinter.Label(self, text=f'{self._cid if self._cid else "(New)"}')
+        id_val.grid(row=0, column=1, padx=5, pady=5, sticky=tkinter.W)
+        code_lbl = tkinter.Label(self, text='Code:')
+        code_lbl.grid(row=1, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            code_entry = tkinter.Entry(self, textvariable=self._code_var, width=10)
         else:
-            code_entry = tkinter.Label(self, textvariable = self._country_code)
-
-        code_entry.grid(row = 1, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        name_label = tkinter.Label(self, text = 'Name: ')
-        name_label.grid(row = 2, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            name_entry = tkinter.Entry(self, textvariable = self._country_name, width = 30)
+            code_entry = tkinter.Label(self, textvariable=self._code_var)
+        code_entry.grid(row=1, column=1, padx=5, pady=5, sticky=tkinter.W)
+        name_lbl = tkinter.Label(self, text='Name:')
+        name_lbl.grid(row=2, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            name_entry = tkinter.Entry(self, textvariable=self._name_var, width=30)
         else:
-            name_entry = tkinter.Label(self, textvariable = self._country_name)
-
-        name_entry.grid(row = 2, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        continent_id_label = tkinter.Label(self, text = 'Continent ID: ')
-        continent_id_label.grid(row = 3, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            continent_id_entry = tkinter.Entry(self, textvariable = self._continent_id, width = 10)
+            name_entry = tkinter.Label(self, textvariable=self._name_var)
+        name_entry.grid(row=2, column=1, padx=5, pady=5, sticky=tkinter.W)
+        continent_lbl = tkinter.Label(self, text='Continent ID:')
+        continent_lbl.grid(row=3, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            continent_entry = tkinter.Entry(self, textvariable=self._continent_var, width=10)
         else:
-            continent_id_entry = tkinter.Label(self, textvariable = self._continent_id)
-
-        continent_id_entry.grid(row = 3, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        wikipedia_link_label = tkinter.Label(self, text = 'Wikipedia Link: ')
-        wikipedia_link_label.grid(row = 4, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            wikipedia_link_entry = tkinter.Entry(self, textvariable = self._wikipedia_link, width = 50)
+            continent_entry = tkinter.Label(self, textvariable=self._continent_var)
+        continent_entry.grid(row=3, column=1, padx=5, pady=5, sticky=tkinter.W)
+        wiki_lbl = tkinter.Label(self, text='Wikipedia:')
+        wiki_lbl.grid(row=4, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            wiki_entry = tkinter.Entry(self, textvariable=self._wiki_var, width=50)
         else:
-            wikipedia_link_entry = tkinter.Label(self, textvariable = self._wikipedia_link)
-
-        wikipedia_link_entry.grid(row = 4, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        keywords_label = tkinter.Label(self, text = 'Keywords: ')
-        keywords_label.grid(row = 5, column = 0, padx = 5, pady = 5, sticky = tkinter.E)
-
-        if is_editable:
-            keywords_entry = tkinter.Entry(self, textvariable = self._keywords, width = 50)
+            wiki_entry = tkinter.Label(self, textvariable=self._wiki_var)
+        wiki_entry.grid(row=4, column=1, padx=5, pady=5, sticky=tkinter.W)
+        keywords_lbl = tkinter.Label(self, text='Keywords:')
+        keywords_lbl.grid(row=5, column=0, padx=5, pady=5, sticky=tkinter.E)
+        if can_edit:
+            keywords_entry = tkinter.Entry(self, textvariable=self._keywords_var, width=50)
         else:
-            keywords_entry = tkinter.Label(self, textvariable = self._keywords)
+            keywords_entry = tkinter.Label(self, textvariable=self._keywords_var)
+        keywords_entry.grid(row=5, column=1, padx=5, pady=5, sticky=tkinter.W)
+        btn_frame = tkinter.Frame(self)
+        btn_frame.grid(row=7, column=1, padx=5, pady=5, sticky=tkinter.SE)
+        if can_edit:
+            save_btn = tkinter.Button(btn_frame, text='Save', command=self._save)
+            save_btn.grid(row=0, column=0, padx=5, pady=5)
+        discard_btn = tkinter.Button(btn_frame, text='Cancel', command=self._discard)
+        discard_btn.grid(row=0, column=1, padx=5, pady=5)
+        self.rowconfigure(0, weight=0)
+        self.rowconfigure(1, weight=0)
+        self.rowconfigure(2, weight=0)
+        self.rowconfigure(3, weight=0)
+        self.rowconfigure(4, weight=0)
+        self.rowconfigure(5, weight=0)
+        self.rowconfigure(6, weight=1)
+        self.rowconfigure(7, weight=0)
+        self.columnconfigure(0, weight=0)
+        self.columnconfigure(1, weight=1)
 
-        keywords_entry.grid(row = 5, column = 1, padx = 5, pady = 5, sticky = tkinter.W)
-
-        button_frame = tkinter.Frame(self)
-        button_frame.grid(row = 7, column = 1, padx = 5, pady = 5, sticky = tkinter.SE)
-
-        if is_editable:
-            save_button = tkinter.Button(button_frame, text = 'Save', command = self._on_save)
-            save_button.grid(row = 0, column = 0, padx = 5, pady = 5)
-
-        discard_button = tkinter.Button(button_frame, text = 'Discard', command = self._on_discard)
-        discard_button.grid(row = 0, column = 1, padx = 5, pady = 5)
-
-        self.rowconfigure(0, weight = 0)
-        self.rowconfigure(1, weight = 0)
-        self.rowconfigure(2, weight = 0)
-        self.rowconfigure(3, weight = 0)
-        self.rowconfigure(4, weight = 0)
-        self.rowconfigure(5, weight = 0)
-        self.rowconfigure(6, weight = 1)
-        self.rowconfigure(7, weight = 0)
-        self.columnconfigure(0, weight = 0)
-        self.columnconfigure(1, weight = 1)
-
-
-    def _on_save(self):
+    def _save(self):
         country = self._make_country()
-
         if country:
             if self._is_new:
-                self.initiate_event(SaveNewCountryEvent(country))
+                self.send_event(CountryCreateRequest(country))
             else:
-                self.initiate_event(SaveCountryEvent(country))
+                self.send_event(CountryUpdateRequest(country))
 
-
-    def _on_discard(self):
-        self.initiate_event(DiscardCountryEvent())
-
+    def _discard(self):
+        self.send_event(CancelCountryEdit())
 
     def _make_country(self):
         try:
-            continent_id = int(self._continent_id.get())
+            continent_id = int(self._continent_var.get())
         except ValueError:
-            tkinter.messagebox.showerror('Save Country Failed', 'Continent ID must be an integer')
+            tkinter.messagebox.showerror('Country Save Error', 'Continent ID must be an integer')
             return None
-
-        return Country(
-            self._country_id, self._country_code.get(), self._country_name.get(),
-            continent_id, self._wikipedia_link.get(), self._keywords.get())
+        return GeoCountry(
+            self._cid, self._code_var.get(), self._name_var.get(),
+            continent_id, self._wiki_var.get(), self._keywords_var.get())

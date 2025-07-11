@@ -6,102 +6,78 @@ from DatabaseSearcher.events import *
 from .events import *
 from .event_handling import EventHandler
 
+_DB_DIALOG_TITLE = 'Select Database File'
 
+class MenuBase(tkinter.Menu, EventHandler):
+    def __init__(self, master):
+        super().__init__(master, tearoff=0)
 
-_OPEN_DATABASE_DIALOG_TITLE = 'Open Database'
+class AppMenuBar(MenuBase):
+    def __init__(self, master):
+        super().__init__(master)
+        self.add_cascade(label='File', menu=FileMenu(self))
+        self.add_cascade(label='Debug', menu=DebugMenu(self))
 
-
-
-class BaseMenu(tkinter.Menu, EventHandler):
-    def __init__(self, parent):
-        super().__init__(parent, tearoff = 0)
-
-
-
-class MainMenu(BaseMenu):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.add_cascade(label = 'File', menu = FileMenu(self))
-        self.add_cascade(label = 'Debug', menu = DebugMenu(self))
-
-
-    def on_event(self, event):
-        if isinstance(event, DatabaseOpenedEvent):
-            self.insert_cascade(index = 1, label = 'Edit', menu = EditMenu(self))
-        elif isinstance(event, DatabaseClosedEvent):
+    def receive_event(self, evt):
+        if isinstance(evt, DBOpenedNotice):
+            self.insert_cascade(index=1, label='Edit', menu=EditMenu(self))
+        elif isinstance(evt, DBCloseNotice):
             self.delete('Edit')
 
+class FileMenu(MenuBase):
+    def __init__(self, master):
+        super().__init__(master)
+        self.add_command(label='Open', state=tkinter.NORMAL, command=self._open_db)
+        self.add_command(label='Close', state=tkinter.DISABLED, command=self._close_db)
+        self.add_command(label='Exit', command=self._exit_app)
 
+    def _open_db(self):
+        file_path = tkinter.filedialog.askopenfilename(
+            title=_DB_DIALOG_TITLE,
+            initialdir=Path.cwd())
+        if file_path:
+            self.send_event(DBOpenRequest(Path(file_path)))
 
-class FileMenu(BaseMenu):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.add_command(label = 'Open', state = tkinter.NORMAL, command = self._on_open)
-        self.add_command(label = 'Close', state = tkinter.DISABLED, command = self._on_close)
-        self.add_command(label = 'Exit', command = self._on_exit)
+    def _close_db(self):
+        self.send_event(DBCloseRequest())
 
+    def _exit_app(self):
+        self.send_event(AppQuitRequest())
 
-    def _on_open(self):
-        open_path = tkinter.filedialog.askopenfilename(
-            title = _OPEN_DATABASE_DIALOG_TITLE,
-            initialdir = Path.cwd())
+    def receive_event(self, evt):
+        if isinstance(evt, DBOpenedNotice):
+            self.entryconfig('Open', state=tkinter.DISABLED)
+            self.entryconfig('Close', state=tkinter.NORMAL)
+        elif isinstance(evt, DBCloseNotice):
+            self.entryconfig('Open', state=tkinter.NORMAL)
+            self.entryconfig('Close', state=tkinter.DISABLED)
 
-        if open_path:
-            self.initiate_event(OpenDatabaseEvent(Path(open_path)))
+class EditMenu(MenuBase):
+    def __init__(self, master):
+        super().__init__(master)
+        self.add_command(label='Continents', command=self._edit_continents)
+        self.add_command(label='Countries', command=self._edit_countries)
+        self.add_command(label='Regions', command=self._edit_regions)
 
+    def _edit_continents(self):
+        self.send_event(ShowContinentsPanel())
 
-    def _on_close(self):
-        self.initiate_event(CloseDatabaseEvent())
+    def _edit_countries(self):
+        self.send_event(ShowCountriesPanel())
 
+    def _edit_regions(self):
+        self.send_event(ShowRegionsPanel())
 
-    def _on_exit(self):
-        self.initiate_event(QuitInitiatedEvent())
-
-
-    def on_event(self, event):
-        if isinstance(event, DatabaseOpenedEvent):
-            self.entryconfig('Open', state = tkinter.DISABLED)
-            self.entryconfig('Close', state = tkinter.NORMAL)
-        elif isinstance(event, DatabaseClosedEvent):
-            self.entryconfig('Open', state = tkinter.NORMAL)
-            self.entryconfig('Close', state = tkinter.DISABLED)
-
-
-
-class EditMenu(BaseMenu):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.add_command(label = 'Continents', command = self._on_edit_continents)
-        self.add_command(label = 'Countries', command = self._on_edit_countries)
-        self.add_command(label = 'Regions', command = self._on_edit_regions)
-
-
-    def _on_edit_continents(self):
-        self.initiate_event(ShowEditContinentsViewEvent())
-
-
-    def _on_edit_countries(self):
-        self.initiate_event(ShowEditCountriesViewEvent())
-
-
-    def _on_edit_regions(self):
-        self.initiate_event(ShowEditRegionsViewEvent())
-
-
-
-class DebugMenu(BaseMenu):
-    def __init__(self, parent):
-        super().__init__(parent)
-
-        self._is_debug_mode = tkinter.IntVar(self, 0)
-
+class DebugMenu(MenuBase):
+    def __init__(self, master):
+        super().__init__(master)
+        self._debug_flag = tkinter.IntVar(self, 0)
         self.add_checkbutton(
-            label = 'Show Events', variable = self._is_debug_mode,
-            command = self._on_change_show_events)
+            label='Show Events', variable=self._debug_flag,
+            command=self._toggle_debug)
 
-
-    def _on_change_show_events(self):
-        if self._is_debug_mode.get():
-            self.initiate_event(EnableDebugModeEvent())
+    def _toggle_debug(self):
+        if self._debug_flag.get():
+            self.send_event(EnableEventDebug())
         else:
-            self.initiate_event(DisableDebugModeEvent())
+            self.send_event(DisableEventDebug())

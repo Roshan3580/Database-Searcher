@@ -27,7 +27,7 @@ class AppMainWindow(tkinter.Tk, EventHandler):
         self.columnconfigure(0, weight=1)
 
     def send_event(self, evt):
-        if is_internal_event(evt):
+        if is_ui_event(evt):
             self.receive_event(evt)
         else:
             self._router.dispatch(evt)
@@ -38,31 +38,31 @@ class AppMainWindow(tkinter.Tk, EventHandler):
         self.mainloop()
 
     def receive_event(self, evt):
-        if isinstance(evt, ShowEditContinentsViewEvent):
+        if isinstance(evt, ShowContinentsPanel):
             self._change_view(ContinentsView(self))
-        elif isinstance(evt, ShowEditCountriesViewEvent):
+        elif isinstance(evt, ShowCountriesPanel):
             self._change_view(CountriesView(self))
-        elif isinstance(evt, ShowEditRegionsViewEvent):
+        elif isinstance(evt, ShowRegionsPanel):
             self._change_view(RegionsView(self))
-        elif isinstance(evt, DatabaseOpenedEvent):
+        elif isinstance(evt, DBOpenedNotice):
             self._show_db_path(evt.path())
-        elif isinstance(evt, DatabaseClosedEvent):
+        elif isinstance(evt, DBCloseNotice):
             self._show_db_path(None)
             self._change_view(EmptyView(self))
-        elif isinstance(evt, DatabaseOpenFailedEvent):
+        elif isinstance(evt, DBOpenFailedNotice):
             self._show_db_path(None)
             self._change_view(EmptyView(self))
             tkinter.messagebox.showerror('Database Error', evt.reason())
-        elif isinstance(evt, EnableDebugModeEvent):
+        elif isinstance(evt, EnableEventDebug):
             self._router.debug_on()
-        elif isinstance(evt, DisableDebugModeEvent):
+        elif isinstance(evt, DisableEventDebug):
             self._router.debug_off()
 
     def after_event(self, evt):
-        if isinstance(evt, EndApplicationEvent):
+        if isinstance(evt, AppShutdownEvent):
             self.destroy()
-        elif isinstance(evt, ErrorEvent):
-            tkinter.messagebox.showerror('App Error', evt.message())
+        elif isinstance(evt, AppErrorEvent):
+            tkinter.messagebox.showerror('App Error', evt.get_message())
 
     def _change_view(self, new_view):
         if self._active_view:

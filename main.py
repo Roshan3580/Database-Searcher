@@ -1,20 +1,16 @@
 # main.py
 
-from DatabaseSearcher import AppEventBus
-from DatabaseSearcher import DatabaseEngine
-from DatabaseSearcher import MainWindow
+from DatabaseSearcher import EventDispatcher
+from DatabaseSearcher import CoreProcessor
+from DatabaseSearcher import AppMainWindow
 
-
-def main():
-    event_bus = AppEventBus()
-    engine = DatabaseEngine()
-    main_view = MainWindow(event_bus)
-
-    event_bus.register_engine(engine)
-    event_bus.register_view(main_view)
-
-    main_view.run()
-
+def launch_app():
+    dispatcher = EventDispatcher()
+    processor = CoreProcessor()
+    window = AppMainWindow(dispatcher)
+    dispatcher.attach_engine(processor)
+    dispatcher.attach_view(window)
+    window.start()
 
 if __name__ == '__main__':
-    main()
+    launch_app()

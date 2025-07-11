@@ -2,56 +2,34 @@
 
 from pathlib import Path
 
-
-
-class OpenDatabaseEvent:
-    def __init__(self, path: Path):
-        self._path = path
-
-
-    def path(self) -> Path:
-        return self._path
-
-
+class DBOpenRequest:
+    def __init__(self, db_path: Path):
+        self._db_path = db_path
+    def get_path(self) -> Path:
+        return self._db_path
     def __repr__(self) -> str:
-        return f'{type(self).__name__}: path = {repr(self._path)}'
+        return f'{type(self).__name__}: db_path = {repr(self._db_path)}'
 
-
-
-class CloseDatabaseEvent:
+class DBCloseRequest:
     def __repr__(self) -> str:
         return f'{type(self).__name__}'
 
-
-
-class DatabaseOpenedEvent:
-    def __init__(self, path: Path):
-        self._path = path
-
-
-    def path(self) -> Path:
-        return self._path
-
-
+class DBOpenedNotice:
+    def __init__(self, db_path: Path):
+        self._db_path = db_path
+    def get_path(self) -> Path:
+        return self._db_path
     def __repr__(self) -> str:
-        return f'{type(self).__name__}: path = {repr(self._path)}'
+        return f'{type(self).__name__}: db_path = {repr(self._db_path)}'
 
-
-
-class DatabaseOpenFailedEvent:
+class DBOpenFailedNotice:
     def __init__(self, reason: str):
         self._reason = reason
-
-
-    def reason(self) -> str:
+    def get_reason(self) -> str:
         return self._reason
-
-
     def __repr__(self) -> str:
         return f'{type(self).__name__}: reason = {repr(self._reason)}'
 
-
-
-class DatabaseClosedEvent:
+class DBCloseNotice:
     def __repr__(self) -> str:
         return f'{type(self).__name__}'

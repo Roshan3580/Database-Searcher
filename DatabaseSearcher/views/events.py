@@ -1,114 +1,76 @@
 # DatabaseSearcher/views/events.py
 
+def is_ui_event(evt):
+    return hasattr(evt, '_UI_EVENT')
 
-
-def is_internal_event(event):
-    return hasattr(event, '_INTERNAL')
-
-
-
-class _InternalEvent:
+class _UIEventBase:
     def __init__(self):
-        self._INTERNAL = True
+        self._UI_EVENT = True
 
-
-
-class ShowEditContinentsViewEvent(_InternalEvent):
+class ShowContinentsPanel(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class ClearContinentsSearchListEvent(_InternalEvent):
+class ClearContinentResults(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class NewContinentEvent(_InternalEvent):
+class AddContinentRequest(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class StartEditingContinentEvent(_InternalEvent):
+class BeginContinentEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class DiscardContinentEvent(_InternalEvent):
+class CancelContinentEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class ShowEditCountriesViewEvent(_InternalEvent):
+class ShowCountriesPanel(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class ClearCountriesSearchListEvent(_InternalEvent):
+class ClearCountryResults(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class NewCountryEvent(_InternalEvent):
+class AddCountryRequest(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class StartEditingCountryEvent(_InternalEvent):
+class BeginCountryEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class DiscardCountryEvent(_InternalEvent):
+class CancelCountryEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class ShowEditRegionsViewEvent(_InternalEvent):
+class ShowRegionsPanel(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class ClearRegionsSearchListEvent(_InternalEvent):
+class ClearRegionResults(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class NewRegionEvent(_InternalEvent):
+class AddRegionRequest(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class StartEditingRegionEvent(_InternalEvent):
+class BeginRegionEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class DiscardRegionEvent(_InternalEvent):
+class CancelRegionEdit(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class EnableDebugModeEvent(_InternalEvent):
+class EnableEventDebug(_UIEventBase):
     def __init__(self):
         super().__init__()
 
-
-
-class DisableDebugModeEvent(_InternalEvent):
+class DisableEventDebug(_UIEventBase):
     def __init__(self):
         super().__init__()

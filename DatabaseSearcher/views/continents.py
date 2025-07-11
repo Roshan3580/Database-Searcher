@@ -4,7 +4,7 @@ import tkinter
 import tkinter.messagebox
 from DatabaseSearcher.events import *
 from .event_handling import EventHandler
-from .events import *
+from .events import CancelContinentEdit, AddContinentRequest, BeginContinentEdit, ClearContinentResults
 
 
 
@@ -28,11 +28,11 @@ class ContinentsView(tkinter.Frame, EventHandler):
 
 
     def on_event_post(self, event):
-        if isinstance(event, DiscardContinentEvent):
+        if isinstance(event, CancelContinentEdit):
             self._switch_edit_view(None)
-        elif isinstance(event, NewContinentEvent):
+        elif isinstance(event, AddContinentRequest):
             self._switch_edit_view(_ContinentEditorView(self, True, True, None))
-        elif isinstance(event, StartEditingContinentEvent):
+        elif isinstance(event, BeginContinentEdit):
             self._switch_edit_view(_ContinentEditorLoadingView(self))
         elif isinstance(event, ContinentLoadedEvent):
             self._switch_edit_view(_ContinentEditorView(self, False, True, event.continent()))
@@ -118,7 +118,7 @@ class _ContinentsSearchView(tkinter.LabelFrame, EventHandler):
 
 
     def _on_search_button_clicked(self):
-        self.initiate_event(ClearContinentsSearchListEvent())
+        self.initiate_event(ClearContinentResults())
         self.initiate_event(StartContinentSearchEvent(self._get_search_code(), self._get_search_name()))
 
 
@@ -157,18 +157,18 @@ class _ContinentsSearchView(tkinter.LabelFrame, EventHandler):
 
 
     def _on_new_continent(self):
-        self.initiate_event(DiscardContinentEvent())
-        self.initiate_event(NewContinentEvent())
+        self.initiate_event(CancelContinentEdit())
+        self.initiate_event(AddContinentRequest())
 
 
     def _on_edit_continent(self):
-        self.initiate_event(DiscardContinentEvent())
-        self.initiate_event(StartEditingContinentEvent())
+        self.initiate_event(CancelContinentEdit())
+        self.initiate_event(BeginContinentEdit())
         self.initiate_event(LoadContinentEvent(self._get_selected_search_continent_id()))
 
 
     def on_event(self, event):
-        if isinstance(event, ClearContinentsSearchListEvent):
+        if isinstance(event, ClearContinentResults):
             self._search_list.delete(0, tkinter.END)
             self._search_continent_ids = []
             self._edit_button['state'] = tkinter.DISABLED
@@ -264,7 +264,7 @@ class _ContinentEditorView(tkinter.LabelFrame, EventHandler):
 
 
     def _on_discard(self):
-        self.initiate_event(DiscardContinentEvent())
+        self.initiate_event(CancelContinentEdit())
 
 
     def _make_continent(self):
