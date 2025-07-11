@@ -60,4 +60,7 @@ python app.py
 - **Models**: Data classes for each entity.
 
 ## License
-MIT License 
+MIT License
+
+---
+*This project was refactored from a school assignment to serve as a general-purpose database search and edit tool.* 
